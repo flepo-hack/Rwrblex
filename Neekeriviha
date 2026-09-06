@@ -1,6 +1,7 @@
 -- ====================================================================
--- CRAZY PSYCHO YANDERE PACK + IY FLY + CLICK TP + TOUCH FLING
--- Engine: Roblox Luau (FilteringEnabled)
+-- CRAZY PSYCHO YANDERE (FE) + IY FLY + CLICK TP + ONE-WAY FLING
+-- Engine: Roblox Luau
+-- Platform: Universal (Mobile Touch & PC Mouse/Keyboard)
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -8,7 +9,6 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local Workspace = game:GetService("Workspace")
-local InsertService = game:GetService("InsertService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -41,9 +41,9 @@ local function notify(title, text)
 end
 
 -- ====================================================================
--- 2. ANIMATION EXTRACTION & INJECTION (Bundle 72046936775195)
+-- 2. DIRECT RBXASSETID ANIMATION SYSTEM (Bundle 72046936775195)
 -- ====================================================================
-local CATALOG_IDS = {
+local ANIM_IDS = {
     Idle  = "104533186777037",
     Walk  = "88407017709207",
     Run   = "80893660363078",
@@ -53,111 +53,121 @@ local CATALOG_IDS = {
     Swim  = "73446051834395"
 }
 
-local ResolvedAnims = {}
+local activeTracks = {
+    Idle = nil,
+    Walk = nil,
+    Run  = nil,
+    Fall = nil
+}
+local animStepConnection = nil
 
--- Etsitään aito AnimationId purkamalla UGC-säilö
-local function extractRealId(catalogId)
-    local numId = tonumber(catalogId)
-    if not numId then return "rbxassetid://" .. tostring(catalogId) end
-
-    -- Tapa 1: game:GetObjects
-    local ok1, objs = pcall(function()
-        return game:GetObjects("rbxassetid://" .. tostring(numId))
-    end)
-    if ok1 and objs and #objs > 0 then
-        for _, descendant in ipairs(objs[1]:GetDescendants()) do
-            if descendant:IsA("Animation") and descendant.AnimationId ~= "" then
-                return descendant.AnimationId
-            end
-        end
-        if objs[1]:IsA("Animation") and objs[1].AnimationId ~= "" then
-            return objs[1].AnimationId
-        end
-    end
-
-    -- Tapa 2: InsertService:LoadAsset
-    local ok2, model = pcall(function()
-        return InsertService:LoadAsset(numId)
-    end)
-    if ok2 and model then
-        for _, descendant in ipairs(model:GetDescendants()) do
-            if descendant:IsA("Animation") and descendant.AnimationId ~= "" then
-                return descendant.AnimationId
-            end
-        end
-    end
-
-    -- Varavaihtoehto: käytetään annettua asset-id:tä
-    return "rbxassetid://" .. tostring(catalogId)
-end
-
-task.spawn(function()
-    for animKey, catId in pairs(CATALOG_IDS) do
-        ResolvedAnims[animKey] = extractRealId(catId)
-    end
-end)
-
-local function applyPsychoAnimations(character)
+local function setupAnimations(character)
     if not character then return end
     local humanoid = character:WaitForChild("Humanoid", 10)
-    local animate = character:WaitForChild("Animate", 10)
-    if not humanoid or not animate then return end
+    local animator = humanoid and humanoid:WaitForChild("Animator", 10)
+    if not humanoid or not animator then return end
 
-    -- Varmistetaan että ID:t ovat purettu
-    for animKey, catId in pairs(CATALOG_IDS) do
-        if not ResolvedAnims[animKey] then
-            ResolvedAnims[animKey] = extractRealId(catId)
+    -- Pysäytetään aiemmat raidat
+    if animStepConnection then
+        animStepConnection:Disconnect()
+        animStepConnection = nil
+    end
+    for _, track in pairs(activeTracks) do
+        if track then
+            track:Stop(0)
+            track:Destroy()
         end
     end
+    activeTracks = {}
 
-    -- Pysäytetään Animate-skripti hetkeksi jotta se lataa uudet arvot
-    animate.Enabled = false
+    -- Luodaan animaatiot suoraan rbxassetid:// -osoitteilla
+    local function createTrack(id, priority, looped)
+        local anim = Instance.new("Animation")
+        anim.AnimationId = "rbxassetid://" .. tostring(id)
+        local track = animator:LoadAnimation(anim)
+        track.Priority = priority
+        track.Looped = looped
+        return track
+    end
 
-    local animMap = {
-        idle = { "Animation1", "Animation2" },
-        walk = { "WalkAnim" },
-        run = { "RunAnim" },
-        jump = { "JumpAnim" },
-        fall = { "FallAnim" },
-        climb = { "ClimbAnim" },
-        swim = { "SwimAnim" }
-    }
+    activeTracks.Idle = createTrack(ANIM_IDS.Idle, Enum.AnimationPriority.Action, true)
+    activeTracks.Walk = createTrack(ANIM_IDS.Walk, Enum.AnimationPriority.Action2, true)
+    activeTracks.Run  = createTrack(ANIM_IDS.Run,  Enum.AnimationPriority.Action2, true)
+    activeTracks.Fall = createTrack(ANIM_IDS.Fall, Enum.AnimationPriority.Action4, true)
 
-    for key, childNames in pairs(animMap) do
-        local folder = animate:FindFirstChild(key)
-        local mappedId = ResolvedAnims[key:sub(1,1):upper() .. key:sub(2)]
-        if folder and mappedId then
-            for _, cName in ipairs(childNames) do
-                local animObj = folder:FindFirstChild(cName)
-                if animObj and animObj:IsA("Animation") then
-                    animObj.AnimationId = mappedId
+    -- Myös Animate-skriptin päivitys
+    local animate = character:FindFirstChild("Animate")
+    if animate then
+        local function setChildId(folderName, childName, assetId)
+            local folder = animate:FindFirstChild(folderName)
+            if folder then
+                local obj = folder:FindFirstChild(childName)
+                if obj and obj:IsA("Animation") then
+                    obj.AnimationId = "rbxassetid://" .. tostring(assetId)
                 end
             end
         end
+        setChildId("idle", "Animation1", ANIM_IDS.Idle)
+        setChildId("idle", "Animation2", ANIM_IDS.Idle)
+        setChildId("walk", "WalkAnim", ANIM_IDS.Walk)
+        setChildId("run", "RunAnim", ANIM_IDS.Run)
+        setChildId("jump", "JumpAnim", ANIM_IDS.Jump)
+        setChildId("fall", "FallAnim", ANIM_IDS.Fall)
+        setChildId("climb", "ClimbAnim", ANIM_IDS.Climb)
+        setChildId("swim", "SwimAnim", ANIM_IDS.Swim)
     end
 
-    -- Käynnistetään Animate uudelleen
-    animate.Enabled = true
-
-    local animator = humanoid:FindFirstChildOfClass("Animator")
-    if animator then
-        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-            track:Stop(0)
+    -- Jatkuva animaationhallinta (varmistaa FE-toiston)
+    animStepConnection = RunService.RenderStepped:Connect(function()
+        if not character or not character.Parent or humanoid.Health <= 0 then
+            return
         end
-    end
+
+        -- Jos lentotila on päällä, Fall-animaatiota hallitsee lentomoduuli
+        if _G.PsychoFlyActive then
+            if activeTracks.Idle and activeTracks.Idle.IsPlaying then activeTracks.Idle:Stop(0.1) end
+            if activeTracks.Walk and activeTracks.Walk.IsPlaying then activeTracks.Walk:Stop(0.1) end
+            if activeTracks.Run and activeTracks.Run.IsPlaying then activeTracks.Run:Stop(0.1) end
+            return
+        end
+
+        local isMoving = humanoid.MoveDirection.Magnitude > 0.05
+        local isAirborne = humanoid:GetState() == Enum.HumanoidStateType.Freefall
+
+        if isAirborne then
+            if not activeTracks.Fall.IsPlaying then activeTracks.Fall:Play(0.1) end
+            if activeTracks.Idle.IsPlaying then activeTracks.Idle:Stop(0.1) end
+            if activeTracks.Walk.IsPlaying then activeTracks.Walk:Stop(0.1) end
+            if activeTracks.Run.IsPlaying then activeTracks.Run:Stop(0.1) end
+        elseif isMoving then
+            if activeTracks.Fall.IsPlaying then activeTracks.Fall:Stop(0.1) end
+            if activeTracks.Idle.IsPlaying then activeTracks.Idle:Stop(0.1) end
+
+            if humanoid.WalkSpeed > 20 then
+                if not activeTracks.Run.IsPlaying then activeTracks.Run:Play(0.1) end
+                if activeTracks.Walk.IsPlaying then activeTracks.Walk:Stop(0.1) end
+            else
+                if not activeTracks.Walk.IsPlaying then activeTracks.Walk:Play(0.1) end
+                if activeTracks.Run.IsPlaying then activeTracks.Run:Stop(0.1) end
+            end
+        else
+            if activeTracks.Fall.IsPlaying then activeTracks.Fall:Stop(0.1) end
+            if activeTracks.Walk.IsPlaying then activeTracks.Walk:Stop(0.1) end
+            if activeTracks.Run.IsPlaying then activeTracks.Run:Stop(0.1) end
+            if not activeTracks.Idle.IsPlaying then activeTracks.Idle:Play(0.1) end
+        end
+    end)
 end
 
 -- ====================================================================
--- 3. STATES & CONFIGURATION
+-- 3. STATE HOLDERS
 -- ====================================================================
-local isFlying = false
+_G.PsychoFlyActive = false
 local flySpeedIndex = 1
 local flySpeeds = { 50, 100, 200 }
 local flyBV = nil
 local flyBG = nil
-local flyAnimTrack = nil
 local flyRenderConn = nil
-local flyNoclipConn = nil
 
 local isFlinging = false
 local flingHeartbeatConn = nil
@@ -165,58 +175,43 @@ local flingHeartbeatConn = nil
 local tpDebounce = false
 
 -- ====================================================================
--- 4. FLY SUBSYSTEM (No-Clip + Fall Animation)
+-- 4. FLY SUBSYSTEM (Infinite Yield Pure Physics - No Freeze on Unfly)
 -- ====================================================================
 local function startFlying(character)
-    if isFlying then return end
+    if _G.PsychoFlyActive then return end
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
     if not hrp or not humanoid then return end
 
-    isFlying = true
+    _G.PsychoFlyActive = true
 
-    flyBV = Instance.new("BodyVelocity")
-    flyBV.Name = "Flight_Velocity"
-    flyBV.Velocity = Vector3.zero
-    flyBV.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-    flyBV.Parent = hrp
-
-    flyBG = Instance.new("BodyGyro")
-    flyBG.Name = "Flight_Gyro"
-    flyBG.P = 9e4
-    flyBG.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
-    flyBG.CFrame = hrp.CFrame
-    flyBG.Parent = hrp
-
-    -- Aito Fall-animaatio lennon aikana
-    local animator = humanoid:FindFirstChildOfClass("Animator")
-    if animator then
-        local fallId = ResolvedAnims.Fall or ("rbxassetid://" .. CATALOG_IDS.Fall)
-        local animObj = Instance.new("Animation")
-        animObj.AnimationId = fallId
-        local ok, track = pcall(function() return animator:LoadAnimation(animObj) end)
-        if ok and track then
-            flyAnimTrack = track
-            flyAnimTrack.Priority = Enum.AnimationPriority.Action4
-            flyAnimTrack.Looped = true
-            flyAnimTrack:Play()
+    -- Poistetaan aiemmat vanhat body moverit
+    for _, obj in ipairs(hrp:GetChildren()) do
+        if obj:IsA("BodyVelocity") or obj:IsA("BodyGyro") then
+            obj:Destroy()
         end
     end
 
-    -- Noclip lennon aikana estää jumiutumisen maastoon ja seiniin
-    flyNoclipConn = RunService.Stepped:Connect(function()
-        if not isFlying or not character then return end
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
-                part.CanCollide = false
-            end
-        end
-    end)
+    flyBV = Instance.new("BodyVelocity")
+    flyBV.Name = "FlightVelocity"
+    flyBV.Velocity = Vector3.zero
+    flyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    flyBV.Parent = hrp
 
-    humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+    flyBG = Instance.new("BodyGyro")
+    flyBG.Name = "FlightGyro"
+    flyBG.P = 9e4
+    flyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    flyBG.CFrame = hrp.CFrame
+    flyBG.Parent = hrp
+
+    -- Toistetaan Fall-animaatio
+    if activeTracks.Fall then
+        activeTracks.Fall:Play(0.1)
+    end
 
     flyRenderConn = RunService.RenderStepped:Connect(function()
-        if not isFlying or not hrp or not humanoid or humanoid.Health <= 0 then
+        if not _G.PsychoFlyActive or not hrp or not humanoid or humanoid.Health <= 0 then
             return
         end
 
@@ -226,19 +221,18 @@ local function startFlying(character)
         local moveVelocity = Vector3.zero
 
         if moveDir.Magnitude > 0.05 then
-            local forward = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z)
-            if forward.Magnitude > 0.001 then
-                forward = forward.Unit
+            local flatLook = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z)
+            if flatLook.Magnitude > 0.001 then
+                flatLook = flatLook.Unit
             else
-                forward = Vector3.new(0, 0, -1)
+                flatLook = Vector3.new(0, 0, -1)
             end
-            local right = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
+            local flatRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
 
-            local fDot = moveDir:Dot(forward)
-            local rDot = moveDir:Dot(right)
+            local fDot = moveDir:Dot(flatLook)
+            local rDot = moveDir:Dot(flatRight)
 
-            -- 3D-katselusuuntainen liike
-            moveVelocity = (camCF.LookVector * fDot + camCF.RightVector * rDot) * speed
+            moveVelocity = (camCF.LookVector * fDot + camCF.RightVector * rDot).Unit * speed
         end
 
         local vert = 0
@@ -255,75 +249,72 @@ local function startFlying(character)
 end
 
 local function stopFlying(character)
-    isFlying = false
+    _G.PsychoFlyActive = false
+
     if flyRenderConn then
         flyRenderConn:Disconnect()
         flyRenderConn = nil
     end
-    if flyNoclipConn then
-        flyNoclipConn:Disconnect()
-        flyNoclipConn = nil
-    end
-    if flyBV then
-        flyBV:Destroy()
-        flyBV = nil
-    end
-    if flyBG then
-        flyBG:Destroy()
-        flyBG = nil
-    end
-    if flyAnimTrack then
-        flyAnimTrack:Stop(0.1)
-        flyAnimTrack:Destroy()
-        flyAnimTrack = nil
+
+    if activeTracks.Fall and activeTracks.Fall.IsPlaying then
+        activeTracks.Fall:Stop(0.1)
     end
 
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    -- Poistetaan voimat ja nollataan nopeus, jotta hahmo ei jää jumiin
     if hrp then
-        hrp.CanCollide = true
+        for _, obj in ipairs(hrp:GetChildren()) do
+            if obj:IsA("BodyVelocity") or obj:IsA("BodyGyro") then
+                obj:Destroy()
+            end
+        end
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
     end
+
     if humanoid then
-        humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+        humanoid.PlatformStand = false
+        humanoid.AutoRotate = true
+        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        task.defer(function()
+            if humanoid and humanoid.Parent then
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end)
     end
 end
 
 -- ====================================================================
--- 5. FLING SUBSYSTEM (Safe Velocity-Pulse Method)
+-- 5. ONE-WAY TOUCH FLING (Pelaajan konseptin mukainen toteutus)
 -- ====================================================================
 local function startFling(character)
     if isFlinging then return end
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if not hrp or not humanoid then return end
+    if not rootPart or not humanoid then return end
 
     isFlinging = true
 
-    -- Estetään oman hahmon kaatuminen
-    humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-    humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-
-    -- Velocity-Pulse silmukka:
-    -- Heartbeatissa (fysiikkalaskenta) asetetaan valtava nopeus, joka siirtää
-    -- törmäysvoiman toiseen pelaajaan. RenderSteppedissä oma nopeus palautetaan
-    -- heti ennalleen, jolloin oma hahmo pysyy maassa/ohjauksessa eikä lennä itse.
     flingHeartbeatConn = RunService.Heartbeat:Connect(function()
-        if not isFlinging or not hrp or not hrp.Parent then return end
-
-        local origLinear = hrp.AssemblyLinearVelocity
-        local origAngular = hrp.AssemblyAngularVelocity
-
-        -- Piikitetään fysiikkamoottorin kontaktivoima
-        hrp.AssemblyLinearVelocity = origLinear * 10000 + Vector3.new(0, 10000, 0)
-        hrp.AssemblyAngularVelocity = Vector3.new(10000, 10000, 10000)
-
-        RunService.RenderStepped:Wait()
-
-        -- Palautetaan oma nopeus välittömästi
-        if hrp and hrp.Parent then
-            hrp.AssemblyLinearVelocity = origLinear
-            hrp.AssemblyAngularVelocity = origAngular
+        if not isFlinging or not rootPart or not rootPart.Parent or humanoid.Health <= 0 then
+            return
         end
+
+        -- 1. Pidetään oma lineaarinopeus hallinnassa (estää itseä lentämästä)
+        local moveDir = humanoid.MoveDirection
+        if moveDir.Magnitude > 0 then
+            rootPart.AssemblyLinearVelocity = moveDir * humanoid.WalkSpeed
+        else
+            rootPart.AssemblyLinearVelocity = Vector3.zero
+        end
+
+        -- 2. Äärimmäinen pyörimisnopeus (siirtää energian kohteeseen)
+        rootPart.AssemblyAngularVelocity = Vector3.new(0, 999999, 0)
+
+        -- 3. Swimming-tila estää kompastumisen maahan ja kumoaa fysiikkareaktion
+        humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
     end)
 end
 
@@ -333,10 +324,22 @@ local function stopFling(character)
         flingHeartbeatConn:Disconnect()
         flingHeartbeatConn = nil
     end
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
+
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    if rootPart then
+        rootPart.AssemblyAngularVelocity = Vector3.zero
+        rootPart.AssemblyLinearVelocity = Vector3.zero
+    end
+
+    if humanoid then
+        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        task.defer(function()
+            if humanoid and humanoid.Parent then
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end)
     end
 end
 
@@ -348,10 +351,10 @@ local function performTeleport(targetPos)
     tpDebounce = true
 
     local character = LocalPlayer.Character
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
-        hrp.AssemblyLinearVelocity = Vector3.zero
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        rootPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
+        rootPart.AssemblyLinearVelocity = Vector3.zero
     end
 
     task.delay(0.15, function()
@@ -365,7 +368,7 @@ local function screenToWorld(x, y)
     params.FilterDescendantsInstances = { LocalPlayer.Character }
     params.FilterType = Enum.RaycastFilterType.Exclude
 
-    local hit = Workspace:Raycast(ray.Origin, ray.Direction * 2500, params)
+    local hit = Workspace:Raycast(ray.Origin, ray.Direction * 3000, params)
     if hit then
         return hit.Position
     end
@@ -387,12 +390,12 @@ local function createTools()
 
     -- TOOL 1: FLY
     local flyTool = Instance.new("Tool")
-    flyTool.Name = "Fly [" .. (isFlying and "Active" or "Inactive") .. "]"
+    flyTool.Name = "Fly [" .. (_G.PsychoFlyActive and "Active" or "Inactive") .. "]"
     flyTool.RequiresHandle = false
     flyTool.CanBeDropped = false
 
     flyTool.Equipped:Connect(function()
-        if not isFlying then
+        if not _G.PsychoFlyActive then
             startFlying(LocalPlayer.Character)
             flyTool.Name = "Fly [Active]"
             notify("Fly", "Active. Speed: " .. flySpeeds[flySpeedIndex])
@@ -404,7 +407,7 @@ local function createTools()
     end)
 
     flyTool.Activated:Connect(function()
-        if isFlying then
+        if _G.PsychoFlyActive then
             flySpeedIndex = (flySpeedIndex % #flySpeeds) + 1
             notify("Fly", "Speed: " .. flySpeeds[flySpeedIndex])
         end
@@ -423,8 +426,8 @@ local function createTools()
     tpTool.Equipped:Connect(function()
         touchConn = UserInputService.TouchTapInWorld:Connect(function(touchPos, gameProcessed)
             if not gameProcessed and tpTool.Parent == LocalPlayer.Character then
-                local worldPos = screenToWorld(touchPos.X, touchPos.Y)
-                performTeleport(worldPos)
+                local hitPos = screenToWorld(touchPos.X, touchPos.Y)
+                performTeleport(hitPos)
             end
         end)
     end)
@@ -472,7 +475,7 @@ end
 local function init(character)
     stopFlying(character)
     stopFling(character)
-    applyPsychoAnimations(character)
+    setupAnimations(character)
     createTools()
 end
 
