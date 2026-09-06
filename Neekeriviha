@@ -1,0 +1,439 @@
+-- ====================================================================
+-- CRAZY PSYCHO YANDERE ANIMATION PACK + FLY + CLICK TP + FLING
+-- Engine: Roblox Luau (FE Replicated)
+-- Platform: Universal (Mobile Touch & PC Keyboard/Mouse)
+-- ====================================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ====================================================================
+-- 1. NOTIFICATION INITIALIZATION
+-- ====================================================================
+task.spawn(function()
+    for _ = 1, 20 do
+        local success = pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "System",
+                Text = "succesful have fun",
+                Duration = 5
+            })
+        end)
+        if success then break end
+        task.wait(0.25)
+    end
+end)
+
+local function sendNotification(title, text)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = 2
+        })
+    end)
+end
+
+-- ====================================================================
+-- 2. ANIMATION ASSET CONFIGURATION (Bundle ID: 72046936775195)
+-- ====================================================================
+local ANIM_IDS = {
+    Idle  = "104533186777037",
+    Walk  = "88407017709207",
+    Run   = "80893660363078",
+    Jump  = "124261560279253",
+    Fall  = "132739248928746",
+    Climb = "122301922486371",
+    Swim  = "73446051834395"
+}
+
+local function applyAnimations(character)
+    if not character then return end
+    local humanoid = character:WaitForChild("Humanoid", 8)
+    local animate = character:WaitForChild("Animate", 8)
+    if not humanoid or not animate then return end
+
+    local mapping = {
+        idle = ANIM_IDS.Idle,
+        walk = ANIM_IDS.Walk,
+        run = ANIM_IDS.Run,
+        jump = ANIM_IDS.Jump,
+        fall = ANIM_IDS.Fall,
+        climb = ANIM_IDS.Climb,
+        swim = ANIM_IDS.Swim
+    }
+
+    for _, descendant in ipairs(animate:GetDescendants()) do
+        if descendant:IsA("Animation") then
+            local parentName = descendant.Parent and descendant.Parent.Name:lower() or ""
+            local selfName = descendant.Name:lower()
+            for key, id in pairs(mapping) do
+                if parentName:find(key) or selfName:find(key) then
+                    descendant.AnimationId = "rbxassetid://" .. id
+                end
+            end
+        end
+    end
+
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if animator then
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+            track:Stop(0)
+        end
+    end
+
+    humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+end
+
+-- ====================================================================
+-- 3. STATE CONTROLLERS
+-- ====================================================================
+local flyActive = false
+local flySpeeds = { 50, 100, 200 }
+local flySpeedIndex = 1
+local flyBodyVelocity = nil
+local flyBodyGyro = nil
+local flyAnimTrack = nil
+local flyConnection = nil
+
+local flingActive = false
+local flingBodyAngularVelocity = nil
+local flingBodyGyro = nil
+local flingAnimTrack = nil
+local flingConnection = nil
+
+local teleportDebounce = false
+
+-- Reference holders for inventory tools
+local flyToolInstance = nil
+local flingToolInstance = nil
+
+-- ====================================================================
+-- 4. FLIGHT SUBSYSTEM
+-- ====================================================================
+local function startFlying(character)
+    if flyActive then return end
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid then return end
+
+    flyActive = true
+
+    flyBodyVelocity = Instance.new("BodyVelocity")
+    flyBodyVelocity.Name = "FlightVelocity"
+    flyBodyVelocity.Velocity = Vector3.zero
+    flyBodyVelocity.MaxForce = Vector3.new(1e8, 1e8, 1e8)
+    flyBodyVelocity.Parent = hrp
+
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.Name = "FlightGyro"
+    flyBodyGyro.P = 9e4
+    flyBodyGyro.MaxTorque = Vector3.new(1e8, 1e8, 1e8)
+    flyBodyGyro.CFrame = hrp.CFrame
+    flyBodyGyro.Parent = hrp
+
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if animator then
+        local fallAnim = Instance.new("Animation")
+        fallAnim.AnimationId = "rbxassetid://" .. ANIM_IDS.Fall
+        flyAnimTrack = animator:LoadAnimation(fallAnim)
+        flyAnimTrack.Priority = Enum.AnimationPriority.Action4
+        flyAnimTrack.Looped = true
+        flyAnimTrack:Play()
+    end
+
+    humanoid.AutoRotate = false
+
+    flyConnection = RunService.RenderStepped:Connect(function()
+        if not flyActive or not hrp or not humanoid or humanoid.Health <= 0 then
+            return
+        end
+
+        local currentSpeed = flySpeeds[flySpeedIndex]
+        local camCF = Camera.CFrame
+        local moveDir = humanoid.MoveDirection
+        local flightVector = Vector3.zero
+
+        if moveDir.Magnitude > 0.05 then
+            local flatLook = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z)
+            if flatLook.Magnitude > 0.001 then
+                flatLook = flatLook.Unit
+            else
+                flatLook = Vector3.new(0, 0, -1)
+            end
+            local flatRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
+
+            local forwardDot = moveDir:Dot(flatLook)
+            local rightDot = moveDir:Dot(flatRight)
+
+            local forwardComponent = camCF.LookVector * forwardDot
+            local rightComponent = camCF.RightVector * rightDot
+
+            flightVector = (forwardComponent + rightComponent).Unit * currentSpeed
+        end
+
+        local verticalComponent = 0
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) or humanoid.Jump then
+            verticalComponent = verticalComponent + currentSpeed
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            verticalComponent = verticalComponent - currentSpeed
+        end
+
+        flyBodyVelocity.Velocity = flightVector + Vector3.new(0, verticalComponent, 0)
+        flyBodyGyro.CFrame = camCF
+        humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+    end)
+end
+
+local function stopFlying(character)
+    flyActive = false
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    if flyBodyVelocity then
+        flyBodyVelocity:Destroy()
+        flyBodyVelocity = nil
+    end
+    if flyBodyGyro then
+        flyBodyGyro:Destroy()
+        flyBodyGyro = nil
+    end
+    if flyAnimTrack then
+        flyAnimTrack:Stop(0.1)
+        flyAnimTrack:Destroy()
+        flyAnimTrack = nil
+    end
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.AutoRotate = true
+        humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+    end
+end
+
+-- ====================================================================
+-- 5. FLING SUBSYSTEM
+-- ====================================================================
+local function startFling(character)
+    if flingActive then return end
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid then return end
+
+    flingActive = true
+
+    humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+    humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+
+    flingBodyGyro = Instance.new("BodyGyro")
+    flingBodyGyro.Name = "FlingGyro"
+    flingBodyGyro.P = 1e9
+    flingBodyGyro.MaxTorque = Vector3.new(1e9, 0, 1e9)
+    flingBodyGyro.CFrame = hrp.CFrame
+    flingBodyGyro.Parent = hrp
+
+    flingBodyAngularVelocity = Instance.new("BodyAngularVelocity")
+    flingBodyAngularVelocity.Name = "FlingAngularVelocity"
+    flingBodyAngularVelocity.AngularVelocity = Vector3.new(0, 999999, 0)
+    flingBodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0)
+    flingBodyAngularVelocity.P = 1e9
+    flingBodyAngularVelocity.Parent = hrp
+
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if animator then
+        local runAnim = Instance.new("Animation")
+        runAnim.AnimationId = "rbxassetid://" .. ANIM_IDS.Run
+        flingAnimTrack = animator:LoadAnimation(runAnim)
+        flingAnimTrack.Priority = Enum.AnimationPriority.Action4
+        flingAnimTrack:AdjustSpeed(3.5)
+        flingAnimTrack.Looped = true
+        flingAnimTrack:Play()
+    end
+
+    flingConnection = RunService.Heartbeat:Connect(function()
+        if not flingActive or not hrp then return end
+        hrp.AssemblyAngularVelocity = Vector3.new(0, 999999, 0)
+    end)
+end
+
+local function stopFling(character)
+    flingActive = false
+    if flingConnection then
+        flingConnection:Disconnect()
+        flingConnection = nil
+    end
+    if flingBodyAngularVelocity then
+        flingBodyAngularVelocity:Destroy()
+        flingBodyAngularVelocity = nil
+    end
+    if flingBodyGyro then
+        flingBodyGyro:Destroy()
+        flingBodyGyro = nil
+    end
+    if flingAnimTrack then
+        flingAnimTrack:Stop(0.1)
+        flingAnimTrack:Destroy()
+        flingAnimTrack = nil
+    end
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end
+end
+
+-- ====================================================================
+-- 6. TELEPORT SUBSYSTEM (Touch & Mouse Raycast)
+-- ====================================================================
+local function performTeleport(worldPosition)
+    if teleportDebounce or not worldPosition then return end
+    teleportDebounce = true
+
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.CFrame = CFrame.new(worldPosition + Vector3.new(0, 3, 0))
+        hrp.AssemblyLinearVelocity = Vector3.zero
+    end
+
+    task.delay(0.15, function()
+        teleportDebounce = false
+    end)
+end
+
+local function screenToWorld(x, y)
+    local ray = Camera:ViewportPointToRay(x, y)
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = { LocalPlayer.Character }
+    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    local result = Workspace:Raycast(ray.Origin, ray.Direction * 2500, params)
+    if result then
+        return result.Position
+    end
+    return ray.Origin + (ray.Direction * 150)
+end
+
+-- ====================================================================
+-- 7. TOOL GENERATION
+-- ====================================================================
+local function createTools()
+    local backpack = LocalPlayer:WaitForChild("Backpack", 8)
+    if not backpack then return end
+
+    -- Clean previous tools if existing
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") and (item.Name:find("Fly") or item.Name:find("Click TP") or item.Name:find("Fling")) then
+            item:Destroy()
+        end
+    end
+
+    -- TOOL: FLY
+    local flyTool = Instance.new("Tool")
+    flyTool.Name = "Fly [" .. (flyActive and "Active" or "Inactive") .. "]"
+    flyTool.RequiresHandle = false
+    flyTool.CanBeDropped = false
+    flyToolInstance = flyTool
+
+    flyTool.Equipped:Connect(function()
+        if not flyActive then
+            startFlying(LocalPlayer.Character)
+            flyTool.Name = "Fly [Active]"
+            sendNotification("Fly", "Active. Speed: " .. flySpeeds[flySpeedIndex])
+        else
+            stopFlying(LocalPlayer.Character)
+            flyTool.Name = "Fly [Inactive]"
+            sendNotification("Fly", "Inactive.")
+        end
+    end)
+
+    flyTool.Activated:Connect(function()
+        if flyActive then
+            flySpeedIndex = (flySpeedIndex % #flySpeeds) + 1
+            sendNotification("Fly", "Speed: " .. flySpeeds[flySpeedIndex])
+        end
+    end)
+
+    flyTool.Parent = backpack
+
+    -- TOOL: CLICK TP
+    local tpTool = Instance.new("Tool")
+    tpTool.Name = "Click TP"
+    tpTool.RequiresHandle = false
+    tpTool.CanBeDropped = false
+
+    local touchConn = nil
+
+    tpTool.Equipped:Connect(function()
+        touchConn = UserInputService.TouchTapInWorld:Connect(function(touchPos, gameProcessed)
+            if not gameProcessed and tpTool.Parent == LocalPlayer.Character then
+                local hitPos = screenToWorld(touchPos.X, touchPos.Y)
+                performTeleport(hitPos)
+            end
+        end)
+    end)
+
+    tpTool.Unequipped:Connect(function()
+        if touchConn then
+            touchConn:Disconnect()
+            touchConn = nil
+        end
+    end)
+
+    tpTool.Activated:Connect(function()
+        local mouse = LocalPlayer:GetMouse()
+        if mouse and mouse.Hit then
+            performTeleport(mouse.Hit.Position)
+        end
+    end)
+
+    tpTool.Parent = backpack
+
+    -- TOOL: FLING
+    local flingTool = Instance.new("Tool")
+    flingTool.Name = "Fling [" .. (flingActive and "Active" or "Inactive") .. "]"
+    flingTool.RequiresHandle = false
+    flingTool.CanBeDropped = false
+    flingToolInstance = flingTool
+
+    flingTool.Equipped:Connect(function()
+        if not flingActive then
+            startFling(LocalPlayer.Character)
+            flingTool.Name = "Fling [Active]"
+            sendNotification("Fling", "Active.")
+        else
+            stopFling(LocalPlayer.Character)
+            flingTool.Name = "Fling [Inactive]"
+            sendNotification("Fling", "Inactive.")
+        end
+    end)
+
+    flingTool.Parent = backpack
+end
+
+-- ====================================================================
+-- 8. LIFECYCLE & RESPAWN MANAGER
+-- ====================================================================
+local function initialize(character)
+    stopFlying(character)
+    stopFling(character)
+    applyAnimations(character)
+    createTools()
+end
+
+if LocalPlayer.Character then
+    task.spawn(function()
+        initialize(LocalPlayer.Character)
+    end)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    task.wait(0.4)
+    initialize(newCharacter)
+end)
