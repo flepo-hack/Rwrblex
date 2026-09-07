@@ -1,6 +1,6 @@
 -- ====================================================================
--- CRAZY PSYCHO ANIMATIONS (FE) + IY FLY + CLICK TP + TOUCH FLING
--- Universal Platform: Mobile Touch & PC Mouse/Keyboard
+-- ROBLOX ZOMBIE PACK (FE) + FLY + TP + FLING + NOCLIP + INVISIBLE
+-- Platform: Universal (Mobile Touch & PC Mouse/Keyboard)
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -40,17 +40,17 @@ local function notify(title, text)
 end
 
 -- ====================================================================
--- 2. UNIVERSAL ANIMATION SYSTEM (Roblox Official Verified IDs)
+-- 2. OFFICIAL ROBLOX ZOMBIE ANIMATION PACK (Verified IDs)
 -- ====================================================================
-local OFFICIAL_PSYCHO_ANIMS = {
-    Idle1 = "1083445855",
-    Idle2 = "1083450166",
-    Walk  = "1083473930",
-    Run   = "1083462077",
-    Jump  = "1083455352",
-    Fall  = "1083443587",
-    Climb = "1083439238",
-    Swim  = "1083464683"
+local ZOMBIE_ANIMS = {
+    Idle1 = "616158929",
+    Idle2 = "616160636",
+    Walk  = "616168032",
+    Run   = "616163682",
+    Jump  = "616161997",
+    Fall  = "616157476",
+    Climb = "616156119",
+    Swim  = "616165109"
 }
 
 local function applyAnimations(character)
@@ -69,16 +69,15 @@ local function applyAnimations(character)
         end
     end
 
-    setAnim("idle", "Animation1", OFFICIAL_PSYCHO_ANIMS.Idle1)
-    setAnim("idle", "Animation2", OFFICIAL_PSYCHO_ANIMS.Idle2)
-    setAnim("walk", "WalkAnim", OFFICIAL_PSYCHO_ANIMS.Walk)
-    setAnim("run", "RunAnim", OFFICIAL_PSYCHO_ANIMS.Run)
-    setAnim("jump", "JumpAnim", OFFICIAL_PSYCHO_ANIMS.Jump)
-    setAnim("fall", "FallAnim", OFFICIAL_PSYCHO_ANIMS.Fall)
-    setAnim("climb", "ClimbAnim", OFFICIAL_PSYCHO_ANIMS.Climb)
-    setAnim("swim", "SwimAnim", OFFICIAL_PSYCHO_ANIMS.Swim)
+    setAnim("idle", "Animation1", ZOMBIE_ANIMS.Idle1)
+    setAnim("idle", "Animation2", ZOMBIE_ANIMS.Idle2)
+    setAnim("walk", "WalkAnim", ZOMBIE_ANIMS.Walk)
+    setAnim("run", "RunAnim", ZOMBIE_ANIMS.Run)
+    setAnim("jump", "JumpAnim", ZOMBIE_ANIMS.Jump)
+    setAnim("fall", "FallAnim", ZOMBIE_ANIMS.Fall)
+    setAnim("climb", "ClimbAnim", ZOMBIE_ANIMS.Climb)
+    setAnim("swim", "SwimAnim", ZOMBIE_ANIMS.Swim)
 
-    -- Pysäytetään aiemmat animaatiot jotta uudet alkavat välittömästi
     local animator = humanoid:FindFirstChildOfClass("Animator")
     if animator then
         for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
@@ -103,10 +102,17 @@ local flyRenderConn = nil
 local isFlinging = false
 local flingThread = nil
 
+local isNoclipping = false
+local noclipConn = nil
+
+local isInvisible = false
+local savedRootJoint = nil
+local savedTorso = nil
+
 local tpDebounce = false
 
 -- ====================================================================
--- 4. FLY SUBSYSTEM (Infinite Yield Pure Model + Smooth Unfly)
+-- 4. FLY SUBSYSTEM (Infinite Yield Pure Model + Zombie Fall)
 -- ====================================================================
 local function startFlying(character)
     if isFlying then return end
@@ -135,11 +141,10 @@ local function startFlying(character)
     flyBG.CFrame = hrp.CFrame
     flyBG.Parent = hrp
 
-    -- Toistetaan Fall-animaatio lennon aikana
     local animator = humanoid:FindFirstChildOfClass("Animator")
     if animator then
         local animObj = Instance.new("Animation")
-        animObj.AnimationId = "rbxassetid://" .. OFFICIAL_PSYCHO_ANIMS.Fall
+        animObj.AnimationId = "rbxassetid://" .. ZOMBIE_ANIMS.Fall
         local ok, track = pcall(function() return animator:LoadAnimation(animObj) end)
         if ok and track then
             flyAnimTrack = track
@@ -206,7 +211,6 @@ local function stopFlying(character)
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
-    -- Poistetaan fysiikkavoimat kokonaan
     if hrp then
         for _, obj in ipairs(hrp:GetChildren()) do
             if obj:IsA("BodyVelocity") or obj:IsA("BodyGyro") then
@@ -217,7 +221,6 @@ local function stopFlying(character)
         hrp.AssemblyAngularVelocity = Vector3.zero
     end
 
-    -- Palautetaan normaali painovoima ilman leijumaan jumiutumista
     if humanoid then
         humanoid.PlatformStand = false
         humanoid.AutoRotate = true
@@ -226,7 +229,7 @@ local function stopFlying(character)
 end
 
 -- ====================================================================
--- 5. FLING SUBSYSTEM (Single-Thread Velocity Pulse Method)
+-- 5. TOUCH FLING SUBSYSTEM (Safe Velocity Pulse Method)
 -- ====================================================================
 local function startFling(character)
     if isFlinging then return end
@@ -239,7 +242,6 @@ local function startFling(character)
     humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
     humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
 
-    -- Yksi hallittu silmukka, joka ei ylikuormita säikeitä eikä pyöritä omaa hahmoasi
     flingThread = task.spawn(function()
         while isFlinging do
             RunService.Heartbeat:Wait()
@@ -250,12 +252,12 @@ local function startFling(character)
             if root and root.Parent then
                 local originalVel = root.AssemblyLinearVelocity
 
-                -- Fysiikka-askel: asetetaan valtava kontaktivoima osumia varten
+                -- Fysiikka-askel: piikitetään kontaktinopeus osumia varten
                 root.AssemblyLinearVelocity = originalVel * 10000 + Vector3.new(0, 10000, 0)
 
                 RunService.RenderStepped:Wait()
 
-                -- Render-askel: palautetaan oma nopeus heti, jotta et itse lähde lentoon
+                -- Render-askel: palautetaan oma nopeus heti
                 if root and root.Parent then
                     root.AssemblyLinearVelocity = originalVel
                 end
@@ -279,7 +281,122 @@ local function stopFling(character)
 end
 
 -- ====================================================================
--- 6. CLICK / TOUCH TELEPORT SUBSYSTEM (Mobile & PC)
+-- 6. NOCLIP SUBSYSTEM (Stepped Loop Collision Controller)
+-- ====================================================================
+local function startNoclip(character)
+    if isNoclipping then return end
+    isNoclipping = true
+
+    noclipConn = RunService.Stepped:Connect(function()
+        if not isNoclipping or not character or not character.Parent then return end
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function stopNoclip(character)
+    isNoclipping = false
+    if noclipConn then
+        noclipConn:Disconnect()
+        noclipConn = nil
+    end
+
+    if character and character.Parent then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if part.Name == "HumanoidRootPart" or part.Name:find("Torso") or part.Name == "Head" then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+end
+
+-- ====================================================================
+-- 7. INVISIBLE / DESYNC SUBSYSTEM (RootJoint Disconnect & Torso Anchor)
+-- ====================================================================
+local function getRootJoint(character)
+    if not character then return nil, nil end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    local lowerTorso = character:FindFirstChild("LowerTorso")
+    local torso = character:FindFirstChild("Torso")
+    local mainTorso = lowerTorso or torso
+
+    if not hrp or not mainTorso then return nil, nil end
+
+    local joint = hrp:FindFirstChild("RootJoint")
+        or (lowerTorso and lowerTorso:FindFirstChild("Root"))
+        or hrp:FindFirstChild("Root")
+        or (torso and torso:FindFirstChild("RootJoint"))
+
+    if not joint then
+        for _, desc in ipairs(character:GetDescendants()) do
+            if desc:IsA("Motor6D") and (desc.Part0 == hrp or desc.Part1 == hrp) then
+                joint = desc
+                break
+            end
+        end
+    end
+
+    return joint, mainTorso
+end
+
+local function startInvisible(character)
+    if isInvisible then return end
+    local joint, mainTorso = getRootJoint(character)
+    if not joint or not mainTorso then
+        notify("Invisible", "RootJoint missing.")
+        return
+    end
+
+    isInvisible = true
+    savedRootJoint = joint
+    savedTorso = mainTorso
+
+    -- Lukitaan näkyvä torso pisteeseen A ja katkaistaan nivel
+    mainTorso.Anchored = true
+    savedRootJoint.Enabled = false
+
+    -- Asetetaan oma näkymä haamutilaan (transparency 0.5)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.Transparency = 0.5
+        end
+    end
+end
+
+local function stopInvisible(character)
+    isInvisible = false
+
+    if savedTorso and savedTorso.Parent then
+        savedTorso.Anchored = false
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            savedTorso.CFrame = hrp.CFrame
+        end
+    end
+
+    if savedRootJoint and savedRootJoint.Parent then
+        savedRootJoint.Enabled = true
+    end
+
+    if character and character.Parent then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.Transparency = 0
+            end
+        end
+    end
+
+    savedRootJoint = nil
+    savedTorso = nil
+end
+
+-- ====================================================================
+-- 8. CLICK / TOUCH TELEPORT SUBSYSTEM (Mobile & PC)
 -- ====================================================================
 local function performTeleport(targetPos)
     if tpDebounce or not targetPos then return end
@@ -312,14 +429,20 @@ local function screenToWorld(x, y)
 end
 
 -- ====================================================================
--- 7. TOOL GENERATION
+-- 9. TOOL GENERATION (5 Modular Backpack Tools)
 -- ====================================================================
 local function createTools()
     local backpack = LocalPlayer:WaitForChild("Backpack", 8)
     if not backpack then return end
 
     for _, item in ipairs(backpack:GetChildren()) do
-        if item:IsA("Tool") and (item.Name:find("Fly") or item.Name:find("Click TP") or item.Name:find("Fling")) then
+        if item:IsA("Tool") and (
+            item.Name:find("Fly") or 
+            item.Name:find("Click TP") or 
+            item.Name:find("Fling") or 
+            item.Name:find("Noclip") or 
+            item.Name:find("Invisible")
+        ) then
             item:Destroy()
         end
     end
@@ -403,14 +526,56 @@ local function createTools()
     end)
 
     flingTool.Parent = backpack
+
+    -- TOOL 4: NOCLIP
+    local noclipTool = Instance.new("Tool")
+    noclipTool.Name = "Noclip [" .. (isNoclipping and "Active" or "Inactive") .. "]"
+    noclipTool.RequiresHandle = false
+    noclipTool.CanBeDropped = false
+
+    noclipTool.Equipped:Connect(function()
+        if not isNoclipping then
+            startNoclip(LocalPlayer.Character)
+            noclipTool.Name = "Noclip [Active]"
+            notify("Noclip", "Active.")
+        else
+            stopNoclip(LocalPlayer.Character)
+            noclipTool.Name = "Noclip [Inactive]"
+            notify("Noclip", "Inactive.")
+        end
+    end)
+
+    noclipTool.Parent = backpack
+
+    -- TOOL 5: INVISIBLE (DESYNC)
+    local invisTool = Instance.new("Tool")
+    invisTool.Name = "Invisible [" .. (isInvisible and "Active" or "Inactive") .. "]"
+    invisTool.RequiresHandle = false
+    invisTool.CanBeDropped = false
+
+    invisTool.Equipped:Connect(function()
+        if not isInvisible then
+            startInvisible(LocalPlayer.Character)
+            invisTool.Name = "Invisible [Active]"
+            notify("Invisible", "Active.")
+        else
+            stopInvisible(LocalPlayer.Character)
+            invisTool.Name = "Invisible [Inactive]"
+            notify("Invisible", "Inactive.")
+        end
+    end)
+
+    invisTool.Parent = backpack
 end
 
 -- ====================================================================
--- 8. INITIALIZATION & RESPAWN
+-- 10. INITIALIZATION & RESPAWN
 -- ====================================================================
 local function init(character)
     stopFlying(character)
     stopFling(character)
+    stopNoclip(character)
+    stopInvisible(character)
     applyAnimations(character)
     createTools()
 end
