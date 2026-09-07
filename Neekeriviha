@@ -1,7 +1,7 @@
 -- ====================================================================
--- ROBLOX ZOMBIE PACK (FE) + CONTROL GUI (MOBILE & PC)
--- Author: made by JZ (User: use2noob)
--- Platform: Universal (Touch & Mouse/Keyboard)
+-- ROBLOX ZOMBIE PACK (FE) + FLY + TP + FLING + NOCLIP + INVISIBLE
+-- Modern Draggable GUI Interface | Mobile & PC Universal
+-- Credit: Made by JZ (use2noob)
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -42,7 +42,7 @@ local function notify(title, text)
 end
 
 -- ====================================================================
--- 2. OFFICIAL ROBLOX ZOMBIE ANIMATIONS (FE)
+-- 2. OFFICIAL ROBLOX ZOMBIE ANIMATION PACK (Verified IDs)
 -- ====================================================================
 local ZOMBIE_ANIMS = {
     Idle1 = "616158929",
@@ -91,7 +91,7 @@ local function applyAnimations(character)
 end
 
 -- ====================================================================
--- 3. FUNCTIONALITY & LOGIC STATES
+-- 3. STATE HOLDERS
 -- ====================================================================
 local isFlying = false
 local flySpeeds = { 50, 100, 200 }
@@ -111,17 +111,15 @@ local isInvisible = false
 local savedRootJoint = nil
 local savedTorso = nil
 
-local isClickTPActive = false
+local isClickTpActive = false
 local tpDebounce = false
-local tpTouchConn = nil
-local tpMouseConn = nil
 
--- UI Button References for State Updates
-local updateUIButtons = {}
+-- GUI Button references for dynamic updating
+local uiButtons = {}
 
--- --------------------------------------------------------------------
--- Fly Subsystem
--- --------------------------------------------------------------------
+-- ====================================================================
+-- 4. FLY SUBSYSTEM (Infinite Yield Model + Zombie Fall)
+-- ====================================================================
 local function startFlying(character)
     if isFlying then return end
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -236,9 +234,9 @@ local function stopFlying(character)
     end
 end
 
--- --------------------------------------------------------------------
--- Fling Subsystem (Velocity Pulse)
--- --------------------------------------------------------------------
+-- ====================================================================
+-- 5. TOUCH FLING SUBSYSTEM (Single-Thread Velocity Pulse Method)
+-- ====================================================================
 local function startFling(character)
     if isFlinging then return end
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -259,10 +257,13 @@ local function startFling(character)
             local root = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
             if root and root.Parent then
                 local originalVel = root.AssemblyLinearVelocity
+
+                -- Fysiikka-askel: asetetaan valtava kontaktinopeus osumia varten
                 root.AssemblyLinearVelocity = originalVel * 10000 + Vector3.new(0, 10000, 0)
 
                 RunService.RenderStepped:Wait()
 
+                -- Render-askel: palautetaan oma nopeus heti
                 if root and root.Parent then
                     root.AssemblyLinearVelocity = originalVel
                 end
@@ -285,9 +286,9 @@ local function stopFling(character)
     end
 end
 
--- --------------------------------------------------------------------
--- Noclip Subsystem
--- --------------------------------------------------------------------
+-- ====================================================================
+-- 6. NOCLIP SUBSYSTEM (Stepped Loop Collision Controller)
+-- ====================================================================
 local function startNoclip(character)
     if isNoclipping then return end
     isNoclipping = true
@@ -320,9 +321,9 @@ local function stopNoclip(character)
     end
 end
 
--- --------------------------------------------------------------------
--- Invisible Subsystem (Desync)
--- --------------------------------------------------------------------
+-- ====================================================================
+-- 7. INVISIBLE / DESYNC SUBSYSTEM (RootJoint Disconnect & Torso Anchor)
+-- ====================================================================
 local function getRootJoint(character)
     if not character then return nil, nil end
     local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -353,7 +354,7 @@ local function startInvisible(character)
     if isInvisible then return end
     local joint, mainTorso = getRootJoint(character)
     if not joint or not mainTorso then
-        notify("Invisible", "RootJoint not found.")
+        notify("Invisible", "RootJoint missing.")
         return
     end
 
@@ -398,9 +399,9 @@ local function stopInvisible(character)
     savedTorso = nil
 end
 
--- --------------------------------------------------------------------
--- Click / Touch Teleport Subsystem
--- --------------------------------------------------------------------
+-- ====================================================================
+-- 8. CLICK / TOUCH TELEPORT SUBSYSTEM (Mobile & PC)
+-- ====================================================================
 local function performTeleport(targetPos)
     if tpDebounce or not targetPos then return end
     tpDebounce = true
@@ -431,83 +432,458 @@ local function screenToWorld(x, y)
     return ray.Origin + (ray.Direction * 150)
 end
 
-local function enableClickTP()
-    if isClickTPActive then return end
-    isClickTPActive = true
+-- Teleport kuuntelijat mobiilikosketukselle ja PC-klikkaukselle
+UserInputService.TouchTapInWorld:Connect(function(touchPos, gameProcessed)
+    if isClickTpActive and not gameProcessed then
+        local worldPos = screenToWorld(touchPos.X, touchPos.Y)
+        performTeleport(worldPos)
+    end
+end)
 
-    tpTouchConn = UserInputService.TouchTapInWorld:Connect(function(touchPos, gameProcessed)
-        if not gameProcessed and isClickTPActive then
-            local hitPos = screenToWorld(touchPos.X, touchPos.Y)
-            performTeleport(hitPos)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if isClickTpActive and not gameProcessed and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local mouse = LocalPlayer:GetMouse()
+        if mouse and mouse.Hit then
+            performTeleport(mouse.Hit.Position)
         end
-    end)
+    end
+end)
 
-    tpMouseConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed and isClickTPActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local mouse = LocalPlayer:GetMouse()
-            if mouse and mouse.Hit then
-                performTeleport(mouse.Hit.Position)
+-- ====================================================================
+-- 9. USER PROFILE THUMBNAIL LOADER (use2noob)
+-- ====================================================================
+local function loadCreatorAvatar(imageLabel)
+    task.spawn(function()
+        local resolvedUserId = nil
+        
+        -- Yritetään hakea käyttäjän use2noob UserId
+        local ok, fetchedId = pcall(function()
+            return Players:GetUserIdFromNameAsync("use2noob")
+        end)
+        if ok and fetchedId then
+            resolvedUserId = fetchedId
+        else
+            if LocalPlayer.Name:lower() == "use2noob" then
+                resolvedUserId = LocalPlayer.UserId
             end
         end
-    end)
-end
 
-local function disableClickTP()
-    isClickTPActive = false
-    if tpTouchConn then
-        tpTouchConn:Disconnect()
-        tpTouchConn = nil
-    end
-    if tpMouseConn then
-        tpMouseConn:Disconnect()
-        tpMouseConn = nil
-    end
-end
-
--- ====================================================================
--- 4. GUI IMPLEMENTATION (COMPACT, ROUNDED, DRAGGABLE, SCROLLABLE)
--- ====================================================================
-local function buildInterface()
-    -- Parent safely to CoreGui if permitted, else PlayerGui
-    local parentTarget = nil
-    pcall(function()
-        if CoreGui and CoreGui:FindFirstChild("RobloxGui") then
-            parentTarget = CoreGui
+        if resolvedUserId then
+            local thumbOk, thumbUrl = pcall(function()
+                return Players:GetUserThumbnailAsync(
+                    resolvedUserId,
+                    Enum.ThumbnailType.HeadShot,
+                    Enum.ThumbnailSize.Size100x100
+                )
+            end)
+            if thumbOk and thumbUrl then
+                imageLabel.Image = thumbUrl
+            else
+                imageLabel.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(resolvedUserId) .. "&w=100&h=100"
+            end
+        else
+            -- Varavaihtoehtona paikallisen pelaajan oma profiilikuva
+            pcall(function()
+                imageLabel.Image = Players:GetUserThumbnailAsync(
+                    LocalPlayer.UserId,
+                    Enum.ThumbnailType.HeadShot,
+                    Enum.ThumbnailSize.Size100x100
+                )
+            end)
         end
     end)
-    if not parentTarget then
-        parentTarget = LocalPlayer:WaitForChild("PlayerGui", 10)
+end
+
+-- ====================================================================
+-- 10. DRAGGABLE GUI HELPER (Mobile Touch & PC Mouse)
+-- ====================================================================
+local function makeDraggable(guiObject, dragHandle)
+    dragHandle = dragHandle or guiObject
+    local dragging = false
+    local dragInput = nil
+    local dragStart = nil
+    local startPos = nil
+
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            guiObject.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+-- ====================================================================
+-- 11. MODERN COMPACT GUI CREATION
+-- ====================================================================
+local function getGuiContainer()
+    local ok, res = pcall(function()
+        if gethui then return gethui() end
+        return CoreGui
+    end)
+    if ok and res then return res end
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ControlPanelGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+pcall(function()
+    screenGui.Parent = getGuiContainer()
+end)
+
+-- 11.1 Oikean yläkulman pieni pyöristetty GUI-nappi
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "OpenGuiButton"
+toggleBtn.Size = UDim2.new(0, 65, 0, 32)
+toggleBtn.Position = UDim2.new(1, -75, 0, 15)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+toggleBtn.TextColor3 = Color3.fromRGB(240, 240, 245)
+toggleBtn.Text = "GUI"
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 14
+toggleBtn.Parent = screenGui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 8)
+toggleCorner.Parent = toggleBtn
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = Color3.fromRGB(58, 58, 70)
+toggleStroke.Thickness = 1.2
+toggleStroke.Parent = toggleBtn
+
+makeDraggable(toggleBtn)
+
+-- 11.2 Pääikkuna (Main Window)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 260, 0, 360)
+mainFrame.Position = UDim2.new(0.5, -130, 0.5, -180)
+mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+mainFrame.Visible = false
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(48, 48, 58)
+mainStroke.Thickness = 1.2
+mainStroke.Parent = mainFrame
+
+-- 11.3 Otsikkopalkki
+local headerFrame = Instance.new("Frame")
+headerFrame.Name = "HeaderFrame"
+headerFrame.Size = UDim2.new(1, 0, 0, 38)
+headerFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+headerFrame.BorderSizePixel = 0
+headerFrame.Parent = mainFrame
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 10)
+headerCorner.Parent = headerFrame
+
+local headerTitle = Instance.new("TextLabel")
+headerTitle.Size = UDim2.new(1, -80, 1, 0)
+headerTitle.Position = UDim2.new(0, 12, 0, 0)
+headerTitle.BackgroundTransparency = 1
+headerTitle.Text = "Control Panel"
+headerTitle.TextColor3 = Color3.fromRGB(240, 240, 245)
+headerTitle.Font = Enum.Font.GothamBold
+headerTitle.TextSize = 14
+headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+headerTitle.Parent = headerFrame
+
+-- Pienennysnappi (-)
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Name = "MinimizeButton"
+minimizeBtn.Size = UDim2.new(0, 28, 0, 28)
+minimizeBtn.Position = UDim2.new(1, -62, 0, 5)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 46)
+minimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 210)
+minimizeBtn.Text = "-"
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 16
+minimizeBtn.Parent = headerFrame
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minimizeBtn
+
+-- Sulkunappi (X)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "CloseButton"
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -32, 0, 5)
+closeBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 46)
+closeBtn.TextColor3 = Color3.fromRGB(220, 100, 100)
+closeBtn.Text = "X"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 13
+closeBtn.Parent = headerFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeBtn
+
+makeDraggable(mainFrame, headerFrame)
+
+-- 11.4 Rullattava sisältöalue (ScrollingFrame)
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Name = "ButtonScroll"
+scrollFrame.Size = UDim2.new(1, -16, 1, -88)
+scrollFrame.Position = UDim2.new(0, 8, 0, 44)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 3
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 95)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 310)
+scrollFrame.Parent = mainFrame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 7)
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = scrollFrame
+
+-- 11.5 Alapalkki (Footer) jossa lukee "Made by JZ (use2noob)" ja avatar-profiilikuva
+local footerFrame = Instance.new("Frame")
+footerFrame.Name = "FooterFrame"
+footerFrame.Size = UDim2.new(1, 0, 0, 40)
+footerFrame.Position = UDim2.new(0, 0, 1, -40)
+footerFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+footerFrame.BorderSizePixel = 0
+footerFrame.Parent = mainFrame
+
+local avatarImg = Instance.new("ImageLabel")
+avatarImg.Name = "CreatorAvatar"
+avatarImg.Size = UDim2.new(0, 26, 0, 26)
+avatarImg.Position = UDim2.new(0, 10, 0, 7)
+avatarImg.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+avatarImg.BackgroundTransparency = 0
+avatarImg.Parent = footerFrame
+
+local avatarCorner = Instance.new("UICorner")
+avatarCorner.CornerRadius = UDim.new(1, 0)
+avatarCorner.Parent = avatarImg
+
+loadCreatorAvatar(avatarImg)
+
+local creditLabel = Instance.new("TextLabel")
+creditLabel.Size = UDim2.new(1, -46, 1, 0)
+creditLabel.Position = UDim2.new(0, 42, 0, 0)
+creditLabel.BackgroundTransparency = 1
+creditLabel.Text = "Made by JZ (use2noob)"
+creditLabel.TextColor3 = Color3.fromRGB(170, 170, 185)
+creditLabel.Font = Enum.Font.GothamMedium
+creditLabel.TextSize = 12
+creditLabel.TextXAlignment = Enum.TextXAlignment.Left
+creditLabel.Parent = footerFrame
+
+-- 11.6 GUI-painikkeiden apufunktio
+local function createMenuButton(name, defaultText, order, callback)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Size = UDim2.new(1, -4, 0, 38)
+    btn.BackgroundColor3 = Color3.fromRGB(34, 34, 42)
+    btn.TextColor3 = Color3.fromRGB(235, 235, 240)
+    btn.Text = defaultText
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.LayoutOrder = order
+    btn.Parent = scrollFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 7)
+    corner.Parent = btn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(50, 50, 62)
+    stroke.Thickness = 1
+    stroke.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        callback(btn, stroke)
+    end)
+
+    return btn, stroke
+end
+
+local function setButtonVisual(btn, stroke, isActive, activeText, inactiveText)
+    if isActive then
+        btn.BackgroundColor3 = Color3.fromRGB(36, 105, 68)
+        stroke.Color = Color3.fromRGB(55, 160, 105)
+        btn.Text = activeText
+    else
+        btn.BackgroundColor3 = Color3.fromRGB(34, 34, 42)
+        stroke.Color = Color3.fromRGB(50, 50, 62)
+        btn.Text = inactiveText
     end
+end
 
-    -- Clean older instances if re-executed
-    if parentTarget:FindFirstChild("JZ_ControlGui") then
-        parentTarget["JZ_ControlGui"]:Destroy()
+-- ====================================================================
+-- 12. LUODAAN KAIKKI 6 PAINIKETTA GUIHIN
+-- ====================================================================
+
+-- 1. FLY BUTTON
+local flyBtn, flyStroke = createMenuButton("FlyButton", "Fly [Inactive]", 1, function(btn, stroke)
+    if not isFlying then
+        startFlying(LocalPlayer.Character)
+        setButtonVisual(btn, stroke, true, "Fly [Active]", "Fly [Inactive]")
+        notify("Fly", "Active. Speed: " .. flySpeeds[flySpeedIndex])
+    else
+        stopFlying(LocalPlayer.Character)
+        setButtonVisual(btn, stroke, false, "Fly [Active]", "Fly [Inactive]")
+        notify("Fly", "Inactive.")
     end
+end)
+uiButtons.Fly = { Button = flyBtn, Stroke = flyStroke }
 
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "JZ_ControlGui"
-    screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+-- 2. FLY SPEED TOGGLE BUTTON
+local speedBtn, speedStroke = createMenuButton("SpeedButton", "Fly Speed: 50", 2, function(btn, stroke)
+    flySpeedIndex = (flySpeedIndex % #flySpeeds) + 1
+    btn.Text = "Fly Speed: " .. flySpeeds[flySpeedIndex]
+    notify("Fly", "Speed: " .. flySpeeds[flySpeedIndex])
+end)
 
-    -- ----------------------------------------------------------------
-    -- Top-Right Quick Toggle Button ("GUI")
-    -- ----------------------------------------------------------------
-    local openButton = Instance.new("TextButton")
-    openButton.Name = "OpenGuiButton"
-    openButton.Size = UDim2.new(0, 58, 0, 28)
-    openButton.Position = UDim2.new(1, -74, 0, 55)
-    openButton.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
-    openButton.TextColor3 = Color3.fromRGB(240, 240, 245)
-    openButton.Text = "GUI"
-    openButton.Font = Enum.Font.GothamBold
-    openButton.TextSize = 13
-    openButton.Parent = screenGui
+-- 3. CLICK TP BUTTON
+local tpBtn, tpStroke = createMenuButton("ClickTpButton", "Click TP [Inactive]", 3, function(btn, stroke)
+    isClickTpActive = not isClickTpActive
+    setButtonVisual(btn, stroke, isClickTpActive, "Click TP [Active]", "Click TP [Inactive]")
+    if isClickTpActive then
+        notify("Click TP", "Active. Tap/Click to teleport.")
+    else
+        notify("Click TP", "Inactive.")
+    end
+end)
+uiButtons.ClickTP = { Button = tpBtn, Stroke = tpStroke }
 
-    local openBtnCorner = Instance.new("UICorner")
-    openBtnCorner.CornerRadius = UDim.new(0, 8)
-    openBtnCorner.Parent = openButton
+-- 4. FLING BUTTON
+local flingBtn, flingStroke = createMenuButton("FlingButton", "Fling [Inactive]", 4, function(btn, stroke)
+    if not isFlinging then
+        startFling(LocalPlayer.Character)
+        setButtonVisual(btn, stroke, true, "Fling [Active]", "Fling [Inactive]")
+        notify("Fling", "Active.")
+    else
+        stopFling(LocalPlayer.Character)
+        setButtonVisual(btn, stroke, false, "Fling [Active]", "Fling [Inactive]")
+        notify("Fling", "Inactive.")
+    end
+end)
+uiButtons.Fling = { Button = flingBtn, Stroke = flingStroke }
 
-    local openBtnStroke = Instance.new("UIStroke")
-    openBtnStroke.Color = Color3.fromRGB(60, 60, 75)
-    openBtnStroke.Thickness = 1.2
-    openBtnStroke.Parent = openButton
+-- 5. NOCLIP BUTTON
+local noclipBtn, noclipStroke = createMenuButton("NoclipButton", "Noclip [Inactive]", 5, function(btn, stroke)
+    if not isNoclipping then
+        startNoclip(LocalPlayer.Character)
+        setButtonVisual(btn, stroke, true, "Noclip [Active]", "Noclip [Inactive]")
+        notify("Noclip", "Active.")
+    else
+        stopNoclip(LocalPlayer.Character)
+        setButtonVisual(btn, stroke, false, "Noclip [Active]", "Noclip [Inactive]")
+        notify("Noclip", "Inactive.")
+    end
+end)
+uiButtons.Noclip = { Button = noclipBtn, Stroke = noclipStroke }
+
+-- 6. INVISIBLE (DESYNC) BUTTON
+local invisBtn, invisStroke = createMenuButton("InvisibleButton", "Invisible [Inactive]", 6, function(btn, stroke)
+    if not isInvisible then
+        startInvisible(LocalPlayer.Character)
+        setButtonVisual(btn, stroke, true, "Invisible [Active]", "Invisible [Inactive]")
+        notify("Invisible", "Active.")
+    else
+        stopInvisible(LocalPlayer.Character)
+        setButtonVisual(btn, stroke, false, "Invisible [Active]", "Invisible [Inactive]")
+        notify("Invisible", "Inactive.")
+    end
+end)
+uiButtons.Invisible = { Button = invisBtn, Stroke = invisStroke }
+
+-- ====================================================================
+-- 13. IKKUNAN AVAUS, PIENENNYS JA SULKEMINEN
+-- ====================================================================
+local isMinimized = false
+
+toggleBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+end)
+
+minimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        mainFrame.Size = UDim2.new(0, 260, 0, 38)
+        scrollFrame.Visible = false
+        footerFrame.Visible = false
+        minimizeBtn.Text = "+"
+    else
+        mainFrame.Size = UDim2.new(0, 260, 0, 360)
+        scrollFrame.Visible = true
+        footerFrame.Visible = true
+        minimizeBtn.Text = "-"
+    end
+end)
+
+-- ====================================================================
+-- 14. INITIALIZATION & RESPAWN MANAGER
+-- ====================================================================
+local function init(character)
+    stopFlying(character)
+    stopFling(character)
+    stopNoclip(character)
+    stopInvisible(character)
+    isClickTpActive = false
+
+    -- Nollataan GUI-tilat visuaalisesti
+    if uiButtons.Fly then setButtonVisual(uiButtons.Fly.Button, uiButtons.Fly.Stroke, false, "Fly [Active]", "Fly [Inactive]") end
+    if uiButtons.ClickTP then setButtonVisual(uiButtons.ClickTP.Button, uiButtons.ClickTP.Stroke, false, "Click TP [Active]", "Click TP [Inactive]") end
+    if uiButtons.Fling then setButtonVisual(uiButtons.Fling.Button, uiButtons.Fling.Stroke, false, "Fling [Active]", "Fling [Inactive]") end
+    if uiButtons.Noclip then setButtonVisual(uiButtons.Noclip.Button, uiButtons.Noclip.Stroke, false, "Noclip [Active]", "Noclip [Inactive]") end
+    if uiButtons.Invisible then setButtonVisual(uiButtons.Invisible.Button, uiButtons.Invisible.Stroke, false, "Invisible [Active]", "Invisible [Inactive]") end
+
+    applyAnimations(character)
+end
+
+if LocalPlayer.Character then
+    task.spawn(function()
+        init(LocalPlayer.Character)
+    end)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    task.wait(0.3)
+    init(newCharacter)
+end)
