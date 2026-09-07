@@ -1,6 +1,7 @@
 -- ====================================================================
--- ROBLOX ZOMBIE PACK (FE) + FLY + TP + FLING + NOCLIP + INVISIBLE
--- Platform: Universal (Mobile Touch & PC Mouse/Keyboard)
+-- ROBLOX ZOMBIE PACK (FE) + CONTROL GUI (MOBILE & PC)
+-- Author: made by JZ (User: use2noob)
+-- Platform: Universal (Touch & Mouse/Keyboard)
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -8,6 +9,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -40,7 +42,7 @@ local function notify(title, text)
 end
 
 -- ====================================================================
--- 2. OFFICIAL ROBLOX ZOMBIE ANIMATION PACK (Verified IDs)
+-- 2. OFFICIAL ROBLOX ZOMBIE ANIMATIONS (FE)
 -- ====================================================================
 local ZOMBIE_ANIMS = {
     Idle1 = "616158929",
@@ -89,7 +91,7 @@ local function applyAnimations(character)
 end
 
 -- ====================================================================
--- 3. STATE HOLDERS
+-- 3. FUNCTIONALITY & LOGIC STATES
 -- ====================================================================
 local isFlying = false
 local flySpeeds = { 50, 100, 200 }
@@ -109,11 +111,17 @@ local isInvisible = false
 local savedRootJoint = nil
 local savedTorso = nil
 
+local isClickTPActive = false
 local tpDebounce = false
+local tpTouchConn = nil
+local tpMouseConn = nil
 
--- ====================================================================
--- 4. FLY SUBSYSTEM (Infinite Yield Pure Model + Zombie Fall)
--- ====================================================================
+-- UI Button References for State Updates
+local updateUIButtons = {}
+
+-- --------------------------------------------------------------------
+-- Fly Subsystem
+-- --------------------------------------------------------------------
 local function startFlying(character)
     if isFlying then return end
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -228,9 +236,9 @@ local function stopFlying(character)
     end
 end
 
--- ====================================================================
--- 5. TOUCH FLING SUBSYSTEM (Safe Velocity Pulse Method)
--- ====================================================================
+-- --------------------------------------------------------------------
+-- Fling Subsystem (Velocity Pulse)
+-- --------------------------------------------------------------------
 local function startFling(character)
     if isFlinging then return end
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -251,13 +259,10 @@ local function startFling(character)
             local root = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
             if root and root.Parent then
                 local originalVel = root.AssemblyLinearVelocity
-
-                -- Fysiikka-askel: piikitetään kontaktinopeus osumia varten
                 root.AssemblyLinearVelocity = originalVel * 10000 + Vector3.new(0, 10000, 0)
 
                 RunService.RenderStepped:Wait()
 
-                -- Render-askel: palautetaan oma nopeus heti
                 if root and root.Parent then
                     root.AssemblyLinearVelocity = originalVel
                 end
@@ -280,9 +285,9 @@ local function stopFling(character)
     end
 end
 
--- ====================================================================
--- 6. NOCLIP SUBSYSTEM (Stepped Loop Collision Controller)
--- ====================================================================
+-- --------------------------------------------------------------------
+-- Noclip Subsystem
+-- --------------------------------------------------------------------
 local function startNoclip(character)
     if isNoclipping then return end
     isNoclipping = true
@@ -315,9 +320,9 @@ local function stopNoclip(character)
     end
 end
 
--- ====================================================================
--- 7. INVISIBLE / DESYNC SUBSYSTEM (RootJoint Disconnect & Torso Anchor)
--- ====================================================================
+-- --------------------------------------------------------------------
+-- Invisible Subsystem (Desync)
+-- --------------------------------------------------------------------
 local function getRootJoint(character)
     if not character then return nil, nil end
     local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -348,7 +353,7 @@ local function startInvisible(character)
     if isInvisible then return end
     local joint, mainTorso = getRootJoint(character)
     if not joint or not mainTorso then
-        notify("Invisible", "RootJoint missing.")
+        notify("Invisible", "RootJoint not found.")
         return
     end
 
@@ -356,11 +361,9 @@ local function startInvisible(character)
     savedRootJoint = joint
     savedTorso = mainTorso
 
-    -- Lukitaan näkyvä torso pisteeseen A ja katkaistaan nivel
     mainTorso.Anchored = true
     savedRootJoint.Enabled = false
 
-    -- Asetetaan oma näkymä haamutilaan (transparency 0.5)
     for _, part in ipairs(character:GetDescendants()) do
         if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
             part.Transparency = 0.5
@@ -395,9 +398,9 @@ local function stopInvisible(character)
     savedTorso = nil
 end
 
--- ====================================================================
--- 8. CLICK / TOUCH TELEPORT SUBSYSTEM (Mobile & PC)
--- ====================================================================
+-- --------------------------------------------------------------------
+-- Click / Touch Teleport Subsystem
+-- --------------------------------------------------------------------
 local function performTeleport(targetPos)
     if tpDebounce or not targetPos then return end
     tpDebounce = true
@@ -428,165 +431,83 @@ local function screenToWorld(x, y)
     return ray.Origin + (ray.Direction * 150)
 end
 
--- ====================================================================
--- 9. TOOL GENERATION (5 Modular Backpack Tools)
--- ====================================================================
-local function createTools()
-    local backpack = LocalPlayer:WaitForChild("Backpack", 8)
-    if not backpack then return end
+local function enableClickTP()
+    if isClickTPActive then return end
+    isClickTPActive = true
 
-    for _, item in ipairs(backpack:GetChildren()) do
-        if item:IsA("Tool") and (
-            item.Name:find("Fly") or 
-            item.Name:find("Click TP") or 
-            item.Name:find("Fling") or 
-            item.Name:find("Noclip") or 
-            item.Name:find("Invisible")
-        ) then
-            item:Destroy()
+    tpTouchConn = UserInputService.TouchTapInWorld:Connect(function(touchPos, gameProcessed)
+        if not gameProcessed and isClickTPActive then
+            local hitPos = screenToWorld(touchPos.X, touchPos.Y)
+            performTeleport(hitPos)
         end
+    end)
+
+    tpMouseConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and isClickTPActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local mouse = LocalPlayer:GetMouse()
+            if mouse and mouse.Hit then
+                performTeleport(mouse.Hit.Position)
+            end
+        end
+    end)
+end
+
+local function disableClickTP()
+    isClickTPActive = false
+    if tpTouchConn then
+        tpTouchConn:Disconnect()
+        tpTouchConn = nil
+    end
+    if tpMouseConn then
+        tpMouseConn:Disconnect()
+        tpMouseConn = nil
+    end
+end
+
+-- ====================================================================
+-- 4. GUI IMPLEMENTATION (COMPACT, ROUNDED, DRAGGABLE, SCROLLABLE)
+-- ====================================================================
+local function buildInterface()
+    -- Parent safely to CoreGui if permitted, else PlayerGui
+    local parentTarget = nil
+    pcall(function()
+        if CoreGui and CoreGui:FindFirstChild("RobloxGui") then
+            parentTarget = CoreGui
+        end
+    end)
+    if not parentTarget then
+        parentTarget = LocalPlayer:WaitForChild("PlayerGui", 10)
     end
 
-    -- TOOL 1: FLY
-    local flyTool = Instance.new("Tool")
-    flyTool.Name = "Fly [" .. (isFlying and "Active" or "Inactive") .. "]"
-    flyTool.RequiresHandle = false
-    flyTool.CanBeDropped = false
+    -- Clean older instances if re-executed
+    if parentTarget:FindFirstChild("JZ_ControlGui") then
+        parentTarget["JZ_ControlGui"]:Destroy()
+    end
 
-    flyTool.Equipped:Connect(function()
-        if not isFlying then
-            startFlying(LocalPlayer.Character)
-            flyTool.Name = "Fly [Active]"
-            notify("Fly", "Active. Speed: " .. flySpeeds[flySpeedIndex])
-        else
-            stopFlying(LocalPlayer.Character)
-            flyTool.Name = "Fly [Inactive]"
-            notify("Fly", "Inactive.")
-        end
-    end)
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "JZ_ControlGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    flyTool.Activated:Connect(function()
-        if isFlying then
-            flySpeedIndex = (flySpeedIndex % #flySpeeds) + 1
-            notify("Fly", "Speed: " .. flySpeeds[flySpeedIndex])
-        end
-    end)
+    -- ----------------------------------------------------------------
+    -- Top-Right Quick Toggle Button ("GUI")
+    -- ----------------------------------------------------------------
+    local openButton = Instance.new("TextButton")
+    openButton.Name = "OpenGuiButton"
+    openButton.Size = UDim2.new(0, 58, 0, 28)
+    openButton.Position = UDim2.new(1, -74, 0, 55)
+    openButton.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+    openButton.TextColor3 = Color3.fromRGB(240, 240, 245)
+    openButton.Text = "GUI"
+    openButton.Font = Enum.Font.GothamBold
+    openButton.TextSize = 13
+    openButton.Parent = screenGui
 
-    flyTool.Parent = backpack
+    local openBtnCorner = Instance.new("UICorner")
+    openBtnCorner.CornerRadius = UDim.new(0, 8)
+    openBtnCorner.Parent = openButton
 
-    -- TOOL 2: CLICK TP
-    local tpTool = Instance.new("Tool")
-    tpTool.Name = "Click TP"
-    tpTool.RequiresHandle = false
-    tpTool.CanBeDropped = false
-
-    local touchConn = nil
-
-    tpTool.Equipped:Connect(function()
-        touchConn = UserInputService.TouchTapInWorld:Connect(function(touchPos, gameProcessed)
-            if not gameProcessed and tpTool.Parent == LocalPlayer.Character then
-                local worldPos = screenToWorld(touchPos.X, touchPos.Y)
-                performTeleport(worldPos)
-            end
-        end)
-    end)
-
-    tpTool.Unequipped:Connect(function()
-        if touchConn then
-            touchConn:Disconnect()
-            touchConn = nil
-        end
-    end)
-
-    tpTool.Activated:Connect(function()
-        local mouse = LocalPlayer:GetMouse()
-        if mouse and mouse.Hit then
-            performTeleport(mouse.Hit.Position)
-        end
-    end)
-
-    tpTool.Parent = backpack
-
-    -- TOOL 3: FLING
-    local flingTool = Instance.new("Tool")
-    flingTool.Name = "Fling [" .. (isFlinging and "Active" or "Inactive") .. "]"
-    flingTool.RequiresHandle = false
-    flingTool.CanBeDropped = false
-
-    flingTool.Equipped:Connect(function()
-        if not isFlinging then
-            startFling(LocalPlayer.Character)
-            flingTool.Name = "Fling [Active]"
-            notify("Fling", "Active.")
-        else
-            stopFling(LocalPlayer.Character)
-            flingTool.Name = "Fling [Inactive]"
-            notify("Fling", "Inactive.")
-        end
-    end)
-
-    flingTool.Parent = backpack
-
-    -- TOOL 4: NOCLIP
-    local noclipTool = Instance.new("Tool")
-    noclipTool.Name = "Noclip [" .. (isNoclipping and "Active" or "Inactive") .. "]"
-    noclipTool.RequiresHandle = false
-    noclipTool.CanBeDropped = false
-
-    noclipTool.Equipped:Connect(function()
-        if not isNoclipping then
-            startNoclip(LocalPlayer.Character)
-            noclipTool.Name = "Noclip [Active]"
-            notify("Noclip", "Active.")
-        else
-            stopNoclip(LocalPlayer.Character)
-            noclipTool.Name = "Noclip [Inactive]"
-            notify("Noclip", "Inactive.")
-        end
-    end)
-
-    noclipTool.Parent = backpack
-
-    -- TOOL 5: INVISIBLE (DESYNC)
-    local invisTool = Instance.new("Tool")
-    invisTool.Name = "Invisible [" .. (isInvisible and "Active" or "Inactive") .. "]"
-    invisTool.RequiresHandle = false
-    invisTool.CanBeDropped = false
-
-    invisTool.Equipped:Connect(function()
-        if not isInvisible then
-            startInvisible(LocalPlayer.Character)
-            invisTool.Name = "Invisible [Active]"
-            notify("Invisible", "Active.")
-        else
-            stopInvisible(LocalPlayer.Character)
-            invisTool.Name = "Invisible [Inactive]"
-            notify("Invisible", "Inactive.")
-        end
-    end)
-
-    invisTool.Parent = backpack
-end
-
--- ====================================================================
--- 10. INITIALIZATION & RESPAWN
--- ====================================================================
-local function init(character)
-    stopFlying(character)
-    stopFling(character)
-    stopNoclip(character)
-    stopInvisible(character)
-    applyAnimations(character)
-    createTools()
-end
-
-if LocalPlayer.Character then
-    task.spawn(function()
-        init(LocalPlayer.Character)
-    end)
-end
-
-LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-    task.wait(0.3)
-    init(newCharacter)
-end)
+    local openBtnStroke = Instance.new("UIStroke")
+    openBtnStroke.Color = Color3.fromRGB(60, 60, 75)
+    openBtnStroke.Thickness = 1.2
+    openBtnStroke.Parent = openButton
