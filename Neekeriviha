@@ -13,10 +13,13 @@ local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
 
--- Taulukko aktiivisille yhteyksille täydellistä sammutusta varten
+local function getCamera()
+    return Workspace.CurrentCamera or Workspace:FindFirstChildOfClass("Camera")
+end
+
 local scriptConnections = {}
+local isTerminated = false
 
 -- ====================================================================
 -- 1. NOTIFICATION SYSTEM ("succesful have fun")
@@ -48,8 +51,6 @@ end
 -- ====================================================================
 -- 2. STATE CONTROLLERS
 -- ====================================================================
-local isTerminated = false
-
 local isFlying = false
 local flySpeeds = { 50, 100, 200 }
 local flySpeedIndex = 1
@@ -70,10 +71,7 @@ local savedTorso = nil
 local isClickTpActive = false
 local tpDebounce = false
 
--- Mukautetut animaatiotilat: "None", "Psycho", "Helicopter", "Dog", "Rabbit"
 local currentAnimMode = "Psycho"
-
--- UI-kytkinten viitteet
 local uiSwitches = {}
 
 -- ====================================================================
@@ -99,35 +97,47 @@ local rabbitHopTimer = 0
 local function cacheJoints(character)
     table.clear(OriginalC0)
     table.clear(OriginalC1)
-    JointCache.RootJoint = nil
-    JointCache.Neck = nil
-    JointCache.RightShoulder = nil
-    JointCache.LeftShoulder = nil
-    JointCache.RightHip = nil
-    JointCache.LeftHip = nil
-    JointCache.Waist = nil
+    for k in pairs(JointCache) do
+        JointCache[k] = nil
+    end
 
     if not character then return end
+
+    local hrp = character:WaitForChild("HumanoidRootPart", 5)
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if not hrp or not humanoid then return end
+
+    -- Odotetaan että vähintään 4 niveltä on replikoitunut
+    local waited = 0
+    while waited < 2 do
+        local count = 0
+        for _, desc in ipairs(character:GetDescendants()) do
+            if desc:IsA("Motor6D") then count = count + 1 end
+        end
+        if count >= 4 then break end
+        task.wait(0.1)
+        waited = waited + 0.1
+    end
 
     for _, desc in ipairs(character:GetDescendants()) do
         if desc:IsA("Motor6D") then
             OriginalC0[desc] = desc.C0
             OriginalC1[desc] = desc.C1
 
-            local name = desc.Name
-            if name == "RootJoint" or name == "Root" then
+            local name = desc.Name:lower():gsub("%s+", "")
+            if name:find("root") then
                 JointCache.RootJoint = desc
-            elseif name == "Neck" then
+            elseif name:find("neck") then
                 JointCache.Neck = desc
-            elseif name == "Right Shoulder" or name == "RightShoulder" then
+            elseif name:find("right") and (name:find("shoulder") or name:find("arm")) then
                 JointCache.RightShoulder = desc
-            elseif name == "Left Shoulder" or name == "LeftShoulder" then
+            elseif name:find("left") and (name:find("shoulder") or name:find("arm")) then
                 JointCache.LeftShoulder = desc
-            elseif name == "Right Hip" or name == "RightHip" then
+            elseif name:find("right") and (name:find("hip") or name:find("leg")) then
                 JointCache.RightHip = desc
-            elseif name == "Left Hip" or name == "LeftHip" then
+            elseif name:find("left") and (name:find("hip") or name:find("leg")) then
                 JointCache.LeftHip = desc
-            elseif name == "Waist" then
+            elseif name:find("waist") then
                 JointCache.Waist = desc
             end
         end
@@ -155,31 +165,50 @@ local function startProceduralEngine(character)
         procAnimConnection = nil
     end
 
-    cacheJoints(character)
+    if not character then return end
 
-    local humanoid = character:WaitForChild("Humanoid", 8)
-    local hrp = character:WaitForChild("HumanoidRootPart", 8)
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    local hrp = character:WaitForChild("HumanoidRootPart", 5)
     if not humanoid or not hrp then return end
+
+    cacheJoints(character)
 
     local animate = character:FindFirstChild("Animate")
     if animate then
-        animate.Enabled = false
+        if currentAnimMode == "None" then
+            animate.Enabled = true
+        else
+            animate.Enabled = false
+        end
     end
+
     local animator = humanoid:FindFirstChildOfClass("Animator")
-    if animator then
+    if animator and currentAnimMode ~= "None" then
         for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
             track:Stop(0)
         end
     end
 
-    procAnimConnection = RunService.Stepped:Connect(function(globalTime, deltaTime)
-        if isTerminated or not character or not character.Parent or humanoid.Health <= 0 then
+    procAnimConnection = RunService.Stepped:Connect(function(timeArg, deltaArg)
+        if isTerminated or not character or not character.Parent or not humanoid or not humanoid.Parent or humanoid.Health <= 0 then
             return
         end
 
-        local isMoving = humanoid.MoveDirection.Magnitude > 0.05
-        local speed = humanoid.WalkSpeed
-        local isAirborne = humanoid:GetState() == Enum.HumanoidStateType.Freefall
+        local globalTime = (typeof(timeArg) == "number" and timeArg) or os.clock()
+        local deltaTime = (typeof(deltaArg) == "number" and deltaArg) or 0.016
+
+        local isMoving = false
+        pcall(function()
+            isMoving = humanoid.MoveDirection.Magnitude > 0.05
+        end)
+        local speed = 16
+        pcall(function()
+            speed = humanoid.WalkSpeed
+        end)
+        local isAirborne = false
+        pcall(function()
+            isAirborne = (humanoid:GetState() == Enum.HumanoidStateType.Freefall)
+        end)
 
         local root = JointCache.RootJoint
         local neck = JointCache.Neck
@@ -189,7 +218,7 @@ local function startProceduralEngine(character)
         local lHip = JointCache.LeftHip
 
         -- -------------------------------------------------------------
-        -- MODUULI 1: HELIKOPTERI
+        -- 1. HELIKOPTERI
         -- -------------------------------------------------------------
         if currentAnimMode == "Helicopter" then
             local speedMultiplier = (isFlying and 55) or (isMoving and 45) or 22
@@ -197,31 +226,26 @@ local function startProceduralEngine(character)
             tailRotorAngle = (tailRotorAngle + deltaTime * speedMultiplier * 1.5) % (math.pi * 2)
 
             if root and OriginalC0[root] then
-                root.C0 = OriginalC0[root] * CFrame.new(0, 0, 0) * CFrame.Angles(math.rad(90), 0, 0)
+                root.C0 = OriginalC0[root] * CFrame.Angles(math.rad(90), 0, 0)
             end
-
             if neck and OriginalC0[neck] then
                 neck.C0 = OriginalC0[neck] * CFrame.Angles(math.rad(-85), 0, 0)
             end
-
             if rShoulder and OriginalC0[rShoulder] then
                 rShoulder.C0 = CFrame.new(0, 1.5, -0.5) * CFrame.Angles(0, rotorAngle, math.rad(90))
             end
-
             if lShoulder and OriginalC0[lShoulder] then
                 lShoulder.C0 = CFrame.new(0, -0.5, 2.2) * CFrame.Angles(math.rad(180), 0, 0)
             end
-
             if rHip and OriginalC0[rHip] then
                 rHip.C0 = CFrame.new(0.6, -1.5, 0.5) * CFrame.Angles(math.rad(-30), 0, 0)
             end
-
             if lHip and OriginalC0[lHip] then
                 lHip.C0 = CFrame.new(0.5, -0.5, 3.2) * CFrame.Angles(tailRotorAngle, 0, math.rad(90))
             end
 
         -- -------------------------------------------------------------
-        -- MODUULI 2: KOIRA (NELINKONTIN & HÄNTÄ)
+        -- 2. KOIRA (NELINKONTIN & HÄNTÄ)
         -- -------------------------------------------------------------
         elseif currentAnimMode == "Dog" then
             local runCycle = math.sin(globalTime * (speed * 0.8))
@@ -230,11 +254,9 @@ local function startProceduralEngine(character)
             if root and OriginalC0[root] then
                 root.C0 = OriginalC0[root] * CFrame.new(0, -1.2, 0) * CFrame.Angles(math.rad(75), 0, 0)
             end
-
             if neck and OriginalC0[neck] then
                 neck.C0 = OriginalC0[neck] * CFrame.Angles(math.rad(-70), 0, 0)
             end
-
             if isMoving then
                 if rShoulder and OriginalC0[rShoulder] then
                     rShoulder.C0 = OriginalC0[rShoulder] * CFrame.new(0, 0.4, 0) * CFrame.Angles(runCycle * 0.7, 0, 0)
@@ -264,7 +286,7 @@ local function startProceduralEngine(character)
             end
 
         -- -------------------------------------------------------------
-        -- MODUULI 3: PUPU (LOIKKIMINEN & KORVAT)
+        -- 3. PUPU (LOIKKIMINEN & KORVAT)
         -- -------------------------------------------------------------
         elseif currentAnimMode == "Rabbit" then
             if isMoving then
@@ -313,7 +335,7 @@ local function startProceduralEngine(character)
             end
 
         -- -------------------------------------------------------------
-        -- MODUULI 4: OMA CRAZY MONSTER PSYCHO
+        -- 4. OMA CRAZY MONSTER PSYCHO
         -- -------------------------------------------------------------
         elseif currentAnimMode == "Psycho" then
             if isAirborne or isFlying then
@@ -402,6 +424,24 @@ end
 local function setAnimationMode(newMode)
     currentAnimMode = newMode
     restoreJoints()
+    local char = LocalPlayer.Character
+    if char then
+        local animate = char:FindFirstChild("Animate")
+        if animate then
+            if newMode == "None" then
+                animate.Enabled = true
+            else
+                animate.Enabled = false
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+                if animator then
+                    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                        track:Stop(0)
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- ====================================================================
@@ -440,7 +480,8 @@ local function startFlying(character)
         end
 
         local speed = flySpeeds[flySpeedIndex]
-        local camCF = Camera.CFrame
+        local cam = getCamera()
+        local camCF = cam and cam.CFrame or CFrame.identity
         local moveDir = humanoid.MoveDirection
         local moveVelocity = Vector3.zero
 
@@ -520,7 +561,8 @@ local function startFling(character)
 
             local currentChar = LocalPlayer.Character
             local root = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
-            if root and root.Parent then
+            local hum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
+            if root and root.Parent and hum and hum.Health > 0 then
                 local originalVel = root.AssemblyLinearVelocity
 
                 root.AssemblyLinearVelocity = originalVel * 10000 + Vector3.new(0, 10000, 0)
@@ -650,8 +692,9 @@ local function stopInvisible(character)
         savedRootJoint.Enabled = true
     end
 
-    if character and character.Parent then
-        for _, part in ipairs(character:GetDescendants()) do
+    local targetChar = character or (savedTorso and savedTorso.Parent)
+    if targetChar then
+        for _, part in ipairs(targetChar:GetDescendants()) do
             if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
                 part.Transparency = 0
             end
@@ -683,9 +726,16 @@ local function performTeleport(targetPos)
 end
 
 local function screenToWorld(x, y)
-    local ray = Camera:ViewportPointToRay(x, y)
+    local cam = getCamera()
+    if not cam then return Vector3.zero end
+
+    local ray = cam:ViewportPointToRay(x, y)
     local params = RaycastParams.new()
-    params.FilterDescendantsInstances = { LocalPlayer.Character }
+    local filterList = {}
+    if LocalPlayer.Character then
+        table.insert(filterList, LocalPlayer.Character)
+    end
+    params.FilterDescendantsInstances = filterList
     params.FilterType = Enum.RaycastFilterType.Exclude
 
     local hit = Workspace:Raycast(ray.Origin, ray.Direction * 3000, params)
@@ -720,20 +770,23 @@ local function loadCreatorAvatar(imageLabel)
     task.spawn(function()
         local targetUserId = nil
 
-        if LocalPlayer.Name:lower() == "use2noob" or LocalPlayer.DisplayName:lower() == "use2noob" then
-            targetUserId = LocalPlayer.UserId
-        else
-            local ok, id = pcall(function()
-                return Players:GetUserIdFromNameAsync("use2noob")
+        pcall(function()
+            if LocalPlayer.Name:lower() == "use2noob" or LocalPlayer.DisplayName:lower() == "use2noob" then
+                targetUserId = LocalPlayer.UserId
+            end
+        end)
+
+        if not targetUserId then
+            pcall(function()
+                targetUserId = Players:GetUserIdFromNameAsync("use2noob")
             end)
-            if ok and id and id > 0 then
-                targetUserId = id
-            else
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p.Name:lower() == "use2noob" or p.DisplayName:lower() == "use2noob" then
-                        targetUserId = p.UserId
-                        break
-                    end
+        end
+
+        if not targetUserId then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Name:lower() == "use2noob" or p.DisplayName:lower() == "use2noob" then
+                    targetUserId = p.UserId
+                    break
                 end
             end
         end
@@ -760,7 +813,7 @@ local function loadCreatorAvatar(imageLabel)
 end
 
 -- ====================================================================
--- 11. DRAGGABLE GUI HELPER
+-- 11. ROBUST DRAGGABLE GUI HELPER
 -- ====================================================================
 local function makeDraggable(guiObject, dragHandle)
     dragHandle = dragHandle or guiObject
@@ -775,13 +828,17 @@ local function makeDraggable(guiObject, dragHandle)
             dragStart = input.Position
             startPos = guiObject.Position
 
-            local dEndConn
-            dEndConn = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
+            local endedConn
+            endedConn = UserInputService.InputEnded:Connect(function(endInput)
+                if endInput == input or endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
                     dragging = false
-                    dEndConn:Disconnect()
+                    if endedConn then
+                        endedConn:Disconnect()
+                        endedConn = nil
+                    end
                 end
             end)
+            table.insert(scriptConnections, endedConn)
         end
     end)
     table.insert(scriptConnections, dStartConn)
@@ -794,7 +851,7 @@ local function makeDraggable(guiObject, dragHandle)
     table.insert(scriptConnections, dMoveConn)
 
     local dInputConn = UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
+        if input == dragInput and dragging and startPos then
             local delta = input.Position - dragStart
             guiObject.Position = UDim2.new(
                 startPos.X.Scale,
@@ -808,15 +865,23 @@ local function makeDraggable(guiObject, dragHandle)
 end
 
 -- ====================================================================
--- 12. COMPACT MODERN GUI CREATION
+-- 12. COMPACT MODERN GUI CREATION (Fail-Safe Container)
 -- ====================================================================
 local function getGuiContainer()
-    local ok, res = pcall(function()
-        if gethui then return gethui() end
-        return CoreGui
+    if gethui then
+        local ok, h = pcall(gethui)
+        if ok and h then return h end
+    end
+    local okCore = pcall(function()
+        local test = Instance.new("Folder")
+        test.Parent = CoreGui
+        test:Destroy()
     end)
-    if ok and res then return res end
-    return LocalPlayer:WaitForChild("PlayerGui")
+    if okCore then
+        return CoreGui
+    end
+    local pGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+    return pGui
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -824,9 +889,15 @@ screenGui.Name = "ControlPanelGui"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-pcall(function()
-    screenGui.Parent = getGuiContainer()
+local targetContainer = getGuiContainer()
+local parentOk = pcall(function()
+    screenGui.Parent = targetContainer
 end)
+if not parentOk or not screenGui.Parent then
+    pcall(function()
+        screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui", 5)
+    end)
+end
 
 -- 12.1 Oikean yläkulman GUI-avauksen suorakulmio
 local toggleBtn = Instance.new("TextButton")
@@ -851,7 +922,7 @@ toggleStroke.Parent = toggleBtn
 
 makeDraggable(toggleBtn)
 
--- 12.2 Pääikkuna (Korkeus pienennetty: 280px)
+-- 12.2 Pääikkuna (Kompakti 280x280)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 280, 0, 280)
@@ -904,7 +975,7 @@ headerTitle.TextSize = 13
 headerTitle.TextXAlignment = Enum.TextXAlignment.Left
 headerTitle.Parent = headerFrame
 
--- Pienennys/Sulku-nappi (-) -> Sulkee käyttöliittymäikkunan (Visible = false)
+-- (-) Nappi -> Sulkee vain käyttöliittymäikkunan (aukeaa GUI-napista)
 local minimizeBtn = Instance.new("TextButton")
 minimizeBtn.Name = "MinimizeButton"
 minimizeBtn.Size = UDim2.new(0, 24, 0, 24)
@@ -920,7 +991,7 @@ local minCorner = Instance.new("UICorner")
 minCorner.CornerRadius = UDim.new(0, 6)
 minCorner.Parent = minimizeBtn
 
--- Täydellinen lopetusnappi (X) -> Sammuttaa koko skriptin kokonaan
+-- (X) Nappi -> Sammuttaa koko skriptin kokonaan
 local closeBtn = Instance.new("TextButton")
 closeBtn.Name = "CloseButton"
 closeBtn.Size = UDim2.new(0, 24, 0, 24)
@@ -1072,6 +1143,7 @@ local function createDashboardCard(name, titleText, order, hasExtraWidget)
 end
 
 local function setPillVisual(pill, stroke, isActive)
+    if not pill or not stroke then return end
     if isActive then
         pill.BackgroundColor3 = Color3.fromRGB(34, 139, 74)
         stroke.Color = Color3.fromRGB(50, 190, 105)
@@ -1083,6 +1155,13 @@ local function setPillVisual(pill, stroke, isActive)
         pill.TextColor3 = Color3.fromRGB(155, 155, 170)
         pill.Text = "OFF"
     end
+end
+
+local function updateAnimPills(activeMode)
+    if uiSwitches.Helicopter then setPillVisual(uiSwitches.Helicopter.Pill, uiSwitches.Helicopter.Stroke, activeMode == "Helicopter") end
+    if uiSwitches.Dog then setPillVisual(uiSwitches.Dog.Pill, uiSwitches.Dog.Stroke, activeMode == "Dog") end
+    if uiSwitches.Rabbit then setPillVisual(uiSwitches.Rabbit.Pill, uiSwitches.Rabbit.Stroke, activeMode == "Rabbit") end
+    if uiSwitches.Psycho then setPillVisual(uiSwitches.Psycho.Pill, uiSwitches.Psycho.Stroke, activeMode == "Psycho") end
 end
 
 -- ====================================================================
@@ -1175,7 +1254,7 @@ heliPill.MouseButton1Click:Connect(function()
             startFlying(LocalPlayer.Character)
             setPillVisual(flyPill, flyPillStroke, true)
         end
-        setPillVisual(heliPill, heliPillStroke, true)
+        updateAnimPills("Helicopter")
         notify("Mode", "Helicopter Mode ON")
     else
         setAnimationMode("Psycho")
@@ -1183,7 +1262,7 @@ heliPill.MouseButton1Click:Connect(function()
             stopFlying(LocalPlayer.Character)
             setPillVisual(flyPill, flyPillStroke, false)
         end
-        setPillVisual(heliPill, heliPillStroke, false)
+        updateAnimPills("Psycho")
         notify("Mode", "Helicopter Mode OFF")
     end
 end)
@@ -1194,11 +1273,11 @@ local _, dogPill, dogPillStroke = createDashboardCard("DogCard", "Dog", 7, false
 dogPill.MouseButton1Click:Connect(function()
     if currentAnimMode ~= "Dog" then
         setAnimationMode("Dog")
-        setPillVisual(dogPill, dogPillStroke, true)
+        updateAnimPills("Dog")
         notify("Mode", "Dog Mode ON")
     else
         setAnimationMode("Psycho")
-        setPillVisual(dogPill, dogPillStroke, false)
+        updateAnimPills("Psycho")
         notify("Mode", "Dog Mode OFF")
     end
 end)
@@ -1209,11 +1288,11 @@ local _, rabbitPill, rabbitPillStroke = createDashboardCard("RabbitCard", "Rabbi
 rabbitPill.MouseButton1Click:Connect(function()
     if currentAnimMode ~= "Rabbit" then
         setAnimationMode("Rabbit")
-        setPillVisual(rabbitPill, rabbitPillStroke, true)
+        updateAnimPills("Rabbit")
         notify("Mode", "Rabbit Mode ON")
     else
         setAnimationMode("Psycho")
-        setPillVisual(rabbitPill, rabbitPillStroke, false)
+        updateAnimPills("Psycho")
         notify("Mode", "Rabbit Mode OFF")
     end
 end)
@@ -1225,11 +1304,11 @@ setPillVisual(psychoPill, psychoPillStroke, true)
 psychoPill.MouseButton1Click:Connect(function()
     if currentAnimMode == "Psycho" then
         setAnimationMode("None")
-        setPillVisual(psychoPill, psychoPillStroke, false)
+        updateAnimPills("None")
         notify("Psycho", "Animations Disabled.")
     else
         setAnimationMode("Psycho")
-        setPillVisual(psychoPill, psychoPillStroke, true)
+        updateAnimPills("Psycho")
         notify("Psycho", "Psycho Animations Active.")
     end
 end)
@@ -1239,55 +1318,52 @@ uiSwitches.Psycho = { Pill = psychoPill, Stroke = psychoPillStroke }
 -- 14. IKKUNAN OHJAUS & SKRIPTIN TÄYDELLINEN SAMMUTUS
 -- ====================================================================
 
--- GUI-painike avaa tai sulkee pääikkunan
+-- GUI-nappi: Avaa ja sulkee pääikkunan
 toggleBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = not mainFrame.Visible
 end)
 
--- (-) nappi SULKEE vain käyttöliittymäikkunan (aukeaa takaisin GUI-napista)
+-- (-) Nappi: Sulkee / kätkee vain käyttöliittymäikkunan
 minimizeBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
 end)
 
--- (X) nappi SAMMUTTAA KOKO SKRIPTIN KOKONAAN (Täydellinen Unload)
+-- (X) Nappi: Sammuttaa koko skriptin kokonaan ja vapauttaa muistin
 local function terminateScript()
     if isTerminated then return end
     isTerminated = true
 
-    notify("System", "Terminating script...")
+    notify("System", "Script terminated.")
 
-    -- 1. Pysäytetään kaikki aktiiviset toiminnot
     local char = LocalPlayer.Character
-    stopFlying(char)
-    stopFling(char)
-    stopNoclip(char)
-    stopInvisible(char)
+    pcall(function() stopFlying(char) end)
+    pcall(function() stopFling(char) end)
+    pcall(function() stopNoclip(char) end)
+    pcall(function() stopInvisible(char) end)
     isClickTpActive = false
 
-    -- 2. Pysäytetään prosessuaalinen animaatiomoottori ja palautetaan nivelet
     if procAnimConnection then
-        procAnimConnection:Disconnect()
+        pcall(function() procAnimConnection:Disconnect() end)
         procAnimConnection = nil
     end
-    restoreJoints()
+    pcall(restoreJoints)
 
-    -- 3. Palautetaan hahmon oma Animate-skripti
     if char then
-        local animate = char:FindFirstChild("Animate")
-        if animate then
-            animate.Enabled = true
-        end
+        pcall(function()
+            local animate = char:FindFirstChild("Animate")
+            if animate then animate.Enabled = true end
+        end)
     end
 
-    -- 4. Katkaistaan kaikki tapahtumakuuntelijat
     for _, conn in ipairs(scriptConnections) do
-        if conn and typeof(conn) == "RBXScriptConnection" then
-            pcall(function() conn:Disconnect() end)
-        end
+        pcall(function()
+            if conn and typeof(conn) == "RBXScriptConnection" then
+                conn:Disconnect()
+            end
+        end)
     end
     table.clear(scriptConnections)
 
-    -- 5. Tuhotaan koko GUI
     pcall(function()
         screenGui:Destroy()
     end)
@@ -1301,7 +1377,7 @@ end)
 -- 15. INITIALIZATION & RESPAWN MANAGER
 -- ====================================================================
 local function init(character)
-    if isTerminated then return end
+    if isTerminated or not character then return end
 
     stopFlying(character)
     stopFling(character)
@@ -1314,12 +1390,9 @@ local function init(character)
     if uiSwitches.Fling then setPillVisual(uiSwitches.Fling.Pill, uiSwitches.Fling.Stroke, false) end
     if uiSwitches.Noclip then setPillVisual(uiSwitches.Noclip.Pill, uiSwitches.Noclip.Stroke, false) end
     if uiSwitches.Invisible then setPillVisual(uiSwitches.Invisible.Pill, uiSwitches.Invisible.Stroke, false) end
-    if uiSwitches.Helicopter then setPillVisual(uiSwitches.Helicopter.Pill, uiSwitches.Helicopter.Stroke, false) end
-    if uiSwitches.Dog then setPillVisual(uiSwitches.Dog.Pill, uiSwitches.Dog.Stroke, false) end
-    if uiSwitches.Rabbit then setPillVisual(uiSwitches.Rabbit.Pill, uiSwitches.Rabbit.Stroke, false) end
-    if uiSwitches.Psycho then setPillVisual(uiSwitches.Psycho.Pill, uiSwitches.Psycho.Stroke, true) end
 
     currentAnimMode = "Psycho"
+    updateAnimPills("Psycho")
     startProceduralEngine(character)
 end
 
@@ -1331,7 +1404,7 @@ end
 
 local charAddedConn = LocalPlayer.CharacterAdded:Connect(function(newCharacter)
     if isTerminated then return end
-    task.wait(0.3)
+    task.wait(0.5)
     init(newCharacter)
 end)
 table.insert(scriptConnections, charAddedConn)
