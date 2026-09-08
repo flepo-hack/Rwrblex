@@ -1,6 +1,6 @@
 -- ====================================================================
--- PROCEDURAL MOTOR6D & FE ACCESSORY REANIMATION ENGINE
--- Universal Kinematics & Physics Suite (R6 & R15 Compatible)
+-- PROCEDURAL MOTOR6D TRANSFORM ENGINE + EXPLOIT SUITE (V3.0 POLISHED)
+-- Accurate Kinematics, Grounded Physics & Zero-Distortion Engine
 -- Platform: Universal (PC Mouse/Keyboard & Mobile Touch)
 -- Credit: Made by JZ
 -- ====================================================================
@@ -49,7 +49,7 @@ local function notify(title, text)
 end
 
 -- ====================================================================
--- 2. STATE CONTROLLERS
+-- 2. STATE CONTROLLERS & PHYSICS CONFIG
 -- ====================================================================
 local isFlying = false
 local flySpeeds = { 50, 100, 200 }
@@ -74,8 +74,11 @@ local tpDebounce = false
 local currentAnimMode = "Psycho"
 local uiSwitches = {}
 
+-- Alkuperäisen HipHeightin muisti (estää maasta ilmaan leijumisen)
+local defaultHipHeight = nil
+
 -- ====================================================================
--- 3. MOTOR6D CACHE & UNIVERSAL CONJUGATION (R6 & R15)
+-- 3. MOTOR6D CACHE & UNIVERSAL KINEMATICS ENGINE
 -- ====================================================================
 local JointCache = {
     IsR15 = false,
@@ -93,10 +96,23 @@ local JointCache = {
 }
 
 local procAnimConnection = nil
-local netlessConnection = nil
 local rotorAngle = 0
 local tailRotorAngle = 0
 local rabbitHopTimer = 0
+
+-- Itsenäiset visuaaliset lisäosat (eivät koske pelaajan omiin hattuihin)
+local customVisualProps = {}
+local dogTailWeld = nil
+
+local function cleanupVisualProps()
+    for _, prop in ipairs(customVisualProps) do
+        pcall(function()
+            if prop and prop.Parent then prop:Destroy() end
+        end)
+    end
+    table.clear(customVisualProps)
+    dogTailWeld = nil
+end
 
 local function cacheJoints(character)
     for k in pairs(JointCache) do
@@ -107,6 +123,10 @@ local function cacheJoints(character)
     character:WaitForChild("HumanoidRootPart", 5)
     local hum = character:WaitForChild("Humanoid", 5)
     JointCache.IsR15 = (hum and hum.RigType == Enum.HumanoidRigType.R15) or (character:FindFirstChild("UpperTorso") ~= nil)
+
+    if hum and defaultHipHeight == nil then
+        defaultHipHeight = hum.HipHeight
+    end
 
     local waited = 0
     while waited < 2 do
@@ -149,7 +169,7 @@ local function cacheJoints(character)
     end
 end
 
--- Universaali C0-kiertomatriisin kumoaminen:
+-- Universaali C0-kiertomatriisin kumoamiskaava
 local function setJoint(joint, desiredCF)
     if not joint or not joint.Parent then return end
     local c0 = joint.C0
@@ -168,234 +188,108 @@ local function resetTransforms()
 end
 
 -- ====================================================================
--- 4. HYBRID FE ACCESSORY (HAT) REANIMATION & VISUAL PROPS
+-- 4. VISUAL PROPS BUILDER (PUPUN KORVAT & KOIRAN HÄNTÄ)
 -- ====================================================================
-local activeHatReanims = {}
-local clientVisualProps = {}
+local function attachProp(part, parentTo, offsetCF)
+    part.CanCollide = false
+    part.CanTouch = false
+    part.CanQuery = false
+    part.Massless = true
+    part.Parent = parentTo
 
-local function cleanupHatReanimation()
-    for _, data in ipairs(activeHatReanims) do
-        pcall(function()
-            if data.Weld and data.Weld.Parent then data.Weld.Enabled = true end
-            if data.AlignPos and data.AlignPos.Parent then data.AlignPos:Destroy() end
-            if data.AlignOri and data.AlignOri.Parent then data.AlignOri:Destroy() end
-            if data.Att0 and data.Att0.Parent then data.Att0:Destroy() end
-            if data.Att1 and data.Att1.Parent then data.Att1:Destroy() end
-            if data.Handle and data.Handle.Parent then data.Handle.AssemblyLinearVelocity = Vector3.zero end
-        end)
+    local weld = Instance.new("Weld")
+    weld.Name = "PropWeld"
+    weld.Part0 = parentTo
+    weld.Part1 = part
+    weld.C0 = offsetCF
+    weld.Parent = part
+
+    table.insert(customVisualProps, part)
+    return part, weld
+end
+
+local function setupRabbitProps(character)
+    local head = character:FindFirstChild("Head")
+    local torso = character:FindFirstChild("Torso") or character:FindFirstChild("LowerTorso")
+    if not head then return end
+
+    local baseColor = Color3.fromRGB(245, 245, 250)
+
+    -- Oikea korva
+    local earR = Instance.new("Part")
+    earR.Name = "RabbitEarR"
+    earR.Size = Vector3.new(0.2, 0.9, 0.22)
+    earR.Color = baseColor
+    earR.Material = Enum.Material.SmoothPlastic
+    local mR = Instance.new("SpecialMesh", earR)
+    mR.MeshType = Enum.MeshType.Cylinder
+    attachProp(earR, head, CFrame.new(0.32, 0.85, -0.05) * CFrame.Angles(math.rad(-14), 0, math.rad(8)))
+
+    -- Vasen korva
+    local earL = Instance.new("Part")
+    earL.Name = "RabbitEarL"
+    earL.Size = Vector3.new(0.2, 0.9, 0.22)
+    earL.Color = baseColor
+    earL.Material = Enum.Material.SmoothPlastic
+    local mL = Instance.new("SpecialMesh", earL)
+    mL.MeshType = Enum.MeshType.Cylinder
+    attachProp(earL, head, CFrame.new(-0.32, 0.85, -0.05) * CFrame.Angles(math.rad(-14), 0, math.rad(-8)))
+
+    -- Pörröinen tupsuhäntä
+    if torso then
+        local tail = Instance.new("Part")
+        tail.Name = "RabbitPuffTail"
+        tail.Size = Vector3.new(0.4, 0.4, 0.4)
+        tail.Color = Color3.fromRGB(255, 255, 255)
+        tail.Material = Enum.Material.SmoothPlastic
+        local mT = Instance.new("SpecialMesh", tail)
+        mT.MeshType = Enum.MeshType.Sphere
+        attachProp(tail, torso, CFrame.new(0, -0.55, 0.65))
     end
-    table.clear(activeHatReanims)
-
-    for _, prop in ipairs(clientVisualProps) do
-        pcall(function() prop:Destroy() end)
-    end
-    table.clear(clientVisualProps)
 end
 
-local function getCharacterHats(character)
-    local hats = {}
-    if not character then return hats end
-    for _, child in ipairs(character:GetChildren()) do
-        if child:IsA("Accessory") then
-            local handle = child:FindFirstChild("Handle")
-            if handle and handle:IsA("BasePart") then
-                table.insert(hats, { Accessory = child, Handle = handle })
-            end
-        end
-    end
-    return hats
-end
-
-local function createHatPhysicsReanim(handle, targetPart)
-    if not handle or not targetPart then return nil end
-    local weld = handle:FindFirstChildWhichIsA("Weld") or handle:FindFirstChildWhichIsA("ManualWeld")
-    if weld then weld.Enabled = false end
-
-    handle.CanCollide = false
-    handle.Massless = true
-
-    local att0 = Instance.new("Attachment")
-    att0.Name = "FE_Att0"
-    att0.Parent = handle
-
-    local att1 = Instance.new("Attachment")
-    att1.Name = "FE_Att1"
-    att1.Parent = targetPart
-
-    local alignPos = Instance.new("AlignPosition")
-    alignPos.Name = "FE_Pos"
-    alignPos.Mode = Enum.PositionAlignmentMode.TwoAttachment
-    alignPos.Attachment0 = att0
-    alignPos.Attachment1 = att1
-    alignPos.RigidityEnabled = true
-    alignPos.Responsiveness = 200
-    alignPos.MaxForce = 9e9
-    alignPos.Parent = handle
-
-    local alignOri = Instance.new("AlignOrientation")
-    alignOri.Name = "FE_Ori"
-    alignOri.Mode = Enum.OrientationAlignmentMode.TwoAttachment
-    alignOri.Attachment0 = att0
-    alignOri.Attachment1 = att1
-    alignOri.RigidityEnabled = true
-    alignOri.Responsiveness = 200
-    alignOri.MaxTorque = 9e9
-    alignOri.Parent = handle
-
-    local data = {
-        Handle = handle,
-        Weld = weld,
-        Att0 = att0,
-        Att1 = att1,
-        AlignPos = alignPos,
-        AlignOri = alignOri,
-        TargetPart = targetPart
-    }
-    table.insert(activeHatReanims, data)
-    return data
-end
-
-local function createClientProp(name, size, color, targetPart, offsetCF)
-    local p = Instance.new("Part")
-    p.Name = name
-    p.Size = size
-    p.Color = color
-    p.Material = Enum.Material.SmoothPlastic
-    p.CanCollide = false
-    p.CanTouch = false
-    p.CanQuery = false
-    p.Massless = true
-    p.Parent = targetPart
-
-    local w = Instance.new("Weld")
-    w.Part0 = targetPart
-    w.Part1 = p
-    w.C0 = offsetCF
-    w.Parent = p
-
-    table.insert(clientVisualProps, p)
-    return p, w
-end
-
-local function setupHatRoles(character, mode)
-    cleanupHatReanimation()
-    if not character or mode == "None" then return end
-
+local function setupDogProps(character)
     local torso = character:FindFirstChild("Torso") or character:FindFirstChild("LowerTorso")
     local head = character:FindFirstChild("Head")
-    local rArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightUpperArm")
-    local lArm = character:FindFirstChild("Left Arm") or character:FindFirstChild("LeftUpperArm")
-    local baseColor = (head and head.Color) or (torso and torso.Color) or Color3.fromRGB(160, 110, 75)
+    if not torso then return end
 
-    local hats = getCharacterHats(character)
+    local baseColor = torso.Color or Color3.fromRGB(140, 100, 65)
 
-    if mode == "Dog" then
-        if hats[1] and torso then
-            local tail = createHatPhysicsReanim(hats[1].Handle, torso)
-            if tail then
-                tail.Role = "DogTail"
-                tail.Att1.CFrame = CFrame.new(0, -0.75, 0.8) * CFrame.Angles(math.rad(45), 0, 0)
-            end
-        elseif torso then
-            local _, w = createClientProp("DogTailProp", Vector3.new(0.25, 0.25, 1.1), baseColor, torso, CFrame.new(0, -0.75, 0.8) * CFrame.Angles(math.rad(45), 0, 0))
-            clientVisualProps.DogTailWeld = w
-        end
-        if hats[2] and head then
-            local eR = createHatPhysicsReanim(hats[2].Handle, head)
-            if eR then eR.Att1.CFrame = CFrame.new(0.55, 0.35, 0) * CFrame.Angles(0, 0, math.rad(-25)) end
-        elseif head then
-            createClientProp("DogEarR", Vector3.new(0.2, 0.55, 0.35), baseColor, head, CFrame.new(0.55, 0.35, 0) * CFrame.Angles(0, 0, math.rad(-25)))
-        end
-        if hats[3] and head then
-            local eL = createHatPhysicsReanim(hats[3].Handle, head)
-            if eL then eL.Att1.CFrame = CFrame.new(-0.55, 0.35, 0) * CFrame.Angles(0, 0, math.rad(25)) end
-        elseif head then
-            createClientProp("DogEarL", Vector3.new(0.2, 0.55, 0.35), baseColor, head, CFrame.new(-0.55, 0.35, 0) * CFrame.Angles(0, 0, math.rad(25)))
-        end
+    -- Koiran dynaaminen häntä
+    local tail = Instance.new("Part")
+    tail.Name = "DogTailProp"
+    tail.Size = Vector3.new(0.22, 0.22, 0.95)
+    tail.Color = baseColor
+    tail.Material = Enum.Material.SmoothPlastic
+    local _, w = attachProp(tail, torso, CFrame.new(0, -0.7, 0.65) * CFrame.Angles(math.rad(45), 0, 0))
+    dogTailWeld = w
 
-    elseif mode == "Rabbit" then
-        if hats[1] and head then
-            local eR = createHatPhysicsReanim(hats[1].Handle, head)
-            if eR then
-                eR.Role = "RabbitEarR"
-                eR.Att1.CFrame = CFrame.new(0.35, 0.85, 0) * CFrame.Angles(math.rad(-10), 0, math.rad(8))
-            end
-        elseif head then
-            local earR = createClientProp("RabbitEarR", Vector3.new(0.22, 0.95, 0.2), Color3.fromRGB(240, 240, 245), head, CFrame.new(0.35, 0.85, 0) * CFrame.Angles(math.rad(-10), 0, math.rad(8)))
-            local m = Instance.new("SpecialMesh", earR)
-            m.MeshType = Enum.MeshType.Cylinder
-        end
-        if hats[2] and head then
-            local eL = createHatPhysicsReanim(hats[2].Handle, head)
-            if eL then
-                eL.Role = "RabbitEarL"
-                eL.Att1.CFrame = CFrame.new(-0.35, 0.85, 0) * CFrame.Angles(math.rad(-10), 0, math.rad(-8))
-            end
-        elseif head then
-            local earL = createClientProp("RabbitEarL", Vector3.new(0.22, 0.95, 0.2), Color3.fromRGB(240, 240, 245), head, CFrame.new(-0.35, 0.85, 0) * CFrame.Angles(math.rad(-10), 0, math.rad(-8)))
-            local m = Instance.new("SpecialMesh", earL)
-            m.MeshType = Enum.MeshType.Cylinder
-        end
-        if hats[3] and torso then
-            local tail = createHatPhysicsReanim(hats[3].Handle, torso)
-            if tail then tail.Att1.CFrame = CFrame.new(0, -0.6, 0.7) end
-        elseif torso then
-            local tail = createClientProp("RabbitTail", Vector3.new(0.4, 0.4, 0.4), Color3.fromRGB(255, 255, 255), torso, CFrame.new(0, -0.6, 0.7))
-            local m = Instance.new("SpecialMesh", tail)
-            m.MeshType = Enum.MeshType.Sphere
-        end
+    -- Koiran luppakorvat
+    if head then
+        local earR = Instance.new("Part")
+        earR.Name = "DogEarR"
+        earR.Size = Vector3.new(0.18, 0.5, 0.3)
+        earR.Color = baseColor
+        attachProp(earR, head, CFrame.new(0.55, 0.3, 0) * CFrame.Angles(0, 0, math.rad(-25)))
 
-    elseif mode == "Helicopter" then
-        if hats[1] and torso then
-            local rotor = createHatPhysicsReanim(hats[1].Handle, torso)
-            if rotor then
-                rotor.Role = "HeliMainRotor"
-                rotor.Att1.CFrame = CFrame.new(0, 0, 0.8)
-            end
-        end
-        if hats[2] and torso then
-            local tRotor = createHatPhysicsReanim(hats[2].Handle, torso)
-            if tRotor then
-                tRotor.Role = "HeliTailRotor"
-                tRotor.Att1.CFrame = CFrame.new(0.45, -2.4, 0)
-            end
-        end
-
-    elseif mode == "Crab" then
-        if hats[1] and rArm then
-            local clawR = createHatPhysicsReanim(hats[1].Handle, rArm)
-            if clawR then
-                clawR.Role = "CrabClawR"
-                clawR.Att1.CFrame = CFrame.new(0, -1.2, 0) * CFrame.Angles(math.rad(90), 0, 0)
-            end
-        end
-        if hats[2] and lArm then
-            local clawL = createHatPhysicsReanim(hats[2].Handle, lArm)
-            if clawL then
-                clawL.Role = "CrabClawL"
-                clawL.Att1.CFrame = CFrame.new(0, -1.2, 0) * CFrame.Angles(math.rad(90), 0, 0)
-            end
-        end
-
-    elseif mode == "Psycho" then
-        if hats[1] and head then
-            local h1 = createHatPhysicsReanim(hats[1].Handle, head)
-            if h1 then
-                h1.Role = "PsychoHat"
-                h1.Att1.CFrame = CFrame.new(0.2, 0.6, 0.1) * CFrame.Angles(math.rad(15), math.rad(25), math.rad(-15))
-            end
-        end
+        local earL = Instance.new("Part")
+        earL.Name = "DogEarL"
+        earL.Size = Vector3.new(0.18, 0.5, 0.3)
+        earL.Color = baseColor
+        attachProp(earL, head, CFrame.new(-0.55, 0.3, 0) * CFrame.Angles(0, 0, math.rad(25)))
     end
 end
 
 -- ====================================================================
--- 5. PROCEDURAL KINEMATICS & PHYSICS LOOP
+-- 5. PROCEDURAL KINEMATICS ANIMATION LOOP
 -- ====================================================================
 local function startProceduralEngine(character)
-    if procAnimConnection then procAnimConnection:Disconnect(); procAnimConnection = nil end
-    if netlessConnection then netlessConnection:Disconnect(); netlessConnection = nil end
-    if not character then return end
+    if procAnimConnection then
+        procAnimConnection:Disconnect()
+        procAnimConnection = nil
+    end
 
+    if not character then return end
     local humanoid = character:WaitForChild("Humanoid", 5)
     local hrp = character:WaitForChild("HumanoidRootPart", 5)
     if not humanoid or not hrp then return end
@@ -403,7 +297,9 @@ local function startProceduralEngine(character)
     cacheJoints(character)
 
     local animate = character:FindFirstChild("Animate")
-    if animate then animate.Enabled = (currentAnimMode == "None") end
+    if animate then
+        animate.Enabled = (currentAnimMode == "None")
+    end
 
     local animator = humanoid:FindFirstChildOfClass("Animator")
     if animator and currentAnimMode ~= "None" then
@@ -411,15 +307,6 @@ local function startProceduralEngine(character)
             track:Stop(0)
         end
     end
-
-    netlessConnection = RunService.Heartbeat:Connect(function()
-        if isTerminated or not character or not character.Parent then return end
-        for _, data in ipairs(activeHatReanims) do
-            if data.Handle and data.Handle.Parent then
-                data.Handle.AssemblyLinearVelocity = Vector3.new(0, -30, 0)
-            end
-        end
-    end)
 
     procAnimConnection = RunService.Stepped:Connect(function(timeArg, deltaArg)
         if isTerminated or not character or not character.Parent or not humanoid or not humanoid.Parent or humanoid.Health <= 0 then
@@ -446,205 +333,213 @@ local function startProceduralEngine(character)
         local rKnee = JointCache.RightKnee
         local lKnee = JointCache.LeftKnee
 
-        -- 1. HELIKOPTERI
+        -- =============================================================
+        -- 1. HELIKOPTERI (Luonnollinen pyörimisnopeus, leijunta & kompakti roottori)
+        -- =============================================================
         if currentAnimMode == "Helicopter" then
-            local spinMult = (isFlying and 70) or (isMoving and 50) or 30
+            -- Miellyttävä, realistinen pyörimisnopeus (ei enää silmitöntä vilkkumista)
+            local spinMult = (isFlying and 38) or (isMoving and 32) or 14
             rotorAngle = (rotorAngle + deltaTime * spinMult) % (math.pi * 2)
-            tailRotorAngle = (tailRotorAngle + deltaTime * spinMult * 1.8) % (math.pi * 2)
+            tailRotorAngle = (tailRotorAngle + deltaTime * spinMult * 1.5) % (math.pi * 2)
 
-            setJoint(root, CFrame.Angles(math.rad(-88), 0, 0))
+            -- Eteenpäin kallistus lennossa, leijuessa pehmeä tasapainotus
+            local forwardTilt = isMoving and math.rad(-14) or math.rad(0)
+            local hoverSway = math.sin(globalTime * 3) * math.rad(2)
+
+            -- Runko vaakatasoon menosuuntaan
+            setJoint(root, CFrame.Angles(math.rad(-88) + forwardTilt, hoverSway, 0))
             if waist then setJoint(waist, CFrame.identity) end
-            setJoint(neck, CFrame.Angles(math.rad(82), 0, 0))
 
-            setJoint(rShoulder, CFrame.new(-1, 0, 0.65) * CFrame.Angles(0, 0, rotorAngle + (math.pi / 2)))
-            setJoint(lShoulder, CFrame.new(1, 0, 0.65) * CFrame.Angles(0, 0, rotorAngle - (math.pi / 2)))
-            setJoint(rHip, CFrame.new(0.2, 0, 0) * CFrame.Angles(math.rad(-5), 0, 0))
-            setJoint(lHip, CFrame.new(0.45, -2.4, 0) * CFrame.Angles(tailRotorAngle, 0, 0))
+            -- Pää etuohjaamoksi suoraan eteen
+            setJoint(neck, CFrame.Angles(math.rad(82) - forwardTilt, 0, 0))
+
+            -- PÄÄROOTTORI: Kädet siististi selän yläpuolella ilman ylivenytystä
+            setJoint(rShoulder, CFrame.new(-0.85, 0, 0.45) * CFrame.Angles(0, 0, rotorAngle + (math.pi / 2)))
+            setJoint(lShoulder, CFrame.new(0.85, 0, 0.45) * CFrame.Angles(0, 0, rotorAngle - (math.pi / 2)))
+
+            -- PERÄPUOMI & PERÄROOTTORI:
+            setJoint(rHip, CFrame.new(0, 0, 0) * CFrame.Angles(math.rad(-3), 0, 0))
+            setJoint(lHip, CFrame.new(0.35, -1.8, 0) * CFrame.Angles(tailRotorAngle, 0, 0))
 
             if rElbow then setJoint(rElbow, CFrame.identity) end
             if lElbow then setJoint(lElbow, CFrame.identity) end
             if rKnee then setJoint(rKnee, CFrame.identity) end
             if lKnee then setJoint(lKnee, CFrame.identity) end
 
-            for _, data in ipairs(activeHatReanims) do
-                if data.Role == "HeliMainRotor" and data.Att1 then
-                    data.Att1.CFrame = CFrame.new(0, 0, 0.8) * CFrame.Angles(0, rotorAngle, 0)
-                elseif data.Role == "HeliTailRotor" and data.Att1 then
-                    data.Att1.CFrame = CFrame.new(0.45, -2.4, 0) * CFrame.Angles(tailRotorAngle, 0, 0)
-                end
-            end
-
-        -- 2. KOIRA (NELINKONTIN MENOSUUNTAAN)
+        -- =============================================================
+        -- 2. KOIRA (Matalalla maassa, koukistetut polvet/kyynärpäät & ravi)
+        -- =============================================================
         elseif currentAnimMode == "Dog" then
             local trotT = globalTime * (speed * 0.75)
-            local diag1 = math.sin(trotT) * math.rad(28)
+            local diag1 = math.sin(trotT) * math.rad(24)
             local diag2 = -diag1
-            local spineBob = isMoving and (math.sin(trotT * 2) * math.rad(3)) or 0
+            local spineBob = isMoving and (math.sin(trotT * 2) * math.rad(2.5)) or 0
 
-            setJoint(root, CFrame.Angles(math.rad(-82) + spineBob, 0, 0))
+            -- Rungon lasku matalalle maahan (ei leiju ilmassa)
+            setJoint(root, CFrame.new(0, -0.65, 0) * CFrame.Angles(math.rad(-82) + spineBob, 0, 0))
             if waist then setJoint(waist, CFrame.identity) end
 
-            local headTurn = isMoving and (math.sin(trotT) * math.rad(4)) or (math.sin(globalTime * 1.5) * math.rad(10))
+            local headTurn = isMoving and (math.sin(trotT) * math.rad(4)) or (math.sin(globalTime * 1.5) * math.rad(8))
             setJoint(neck, CFrame.Angles(math.rad(78), headTurn, 0))
 
             if isMoving then
-                setJoint(rShoulder, CFrame.Angles(math.rad(82) + diag1, 0, math.rad(6)))
-                setJoint(lHip, CFrame.Angles(math.rad(82) + diag1, 0, math.rad(-6)))
-                setJoint(lShoulder, CFrame.Angles(math.rad(82) + diag2, 0, math.rad(-6)))
-                setJoint(rHip, CFrame.Angles(math.rad(82) + diag2, 0, math.rad(6)))
+                -- Eturaajat
+                setJoint(rShoulder, CFrame.Angles(math.rad(70) + diag1, 0, math.rad(5)))
+                setJoint(lShoulder, CFrame.Angles(math.rad(70) + diag2, 0, math.rad(-5)))
+                -- Takaraajat
+                setJoint(rHip, CFrame.Angles(math.rad(72) + diag2, 0, math.rad(5)))
+                setJoint(lHip, CFrame.Angles(math.rad(72) + diag1, 0, math.rad(-5)))
             else
-                local pant = math.sin(globalTime * 3.5) * math.rad(2)
-                setJoint(rShoulder, CFrame.Angles(math.rad(82) + pant, 0, math.rad(6)))
-                setJoint(lShoulder, CFrame.Angles(math.rad(82) + pant, 0, math.rad(-6)))
-                setJoint(rHip, CFrame.Angles(math.rad(82) + pant, 0, math.rad(6)))
-                setJoint(lHip, CFrame.Angles(math.rad(82) + pant, 0, math.rad(-6)))
+                local pant = math.sin(globalTime * 3.5) * math.rad(1.5)
+                setJoint(rShoulder, CFrame.Angles(math.rad(70) + pant, 0, math.rad(5)))
+                setJoint(lShoulder, CFrame.Angles(math.rad(70) + pant, 0, math.rad(-5)))
+                setJoint(rHip, CFrame.Angles(math.rad(72) + pant, 0, math.rad(5)))
+                setJoint(lHip, CFrame.Angles(math.rad(72) + pant, 0, math.rad(-5)))
             end
 
-            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-15), 0, 0)) end
-            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-15), 0, 0)) end
-            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(20), 0, 0)) end
-            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(20), 0, 0)) end
+            -- KOUKISTETUT POLVET JA KYYNÄRPÄÄT (Aidot eläimen nivelet)
+            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-40), 0, 0)) end
+            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-40), 0, 0)) end
+            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(45), 0, 0)) end
+            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(45), 0, 0)) end
 
-            local wagSpeed = isMoving and 22 or 10
-            local wagAngle = math.sin(globalTime * wagSpeed) * math.rad(38)
-            for _, data in ipairs(activeHatReanims) do
-                if data.Role == "DogTail" and data.Att1 then
-                    data.Att1.CFrame = CFrame.new(0, -0.75, 0.8) * CFrame.Angles(math.rad(45), wagAngle, 0)
-                end
-            end
-            if clientVisualProps.DogTailWeld and clientVisualProps.DogTailWeld.Parent then
-                clientVisualProps.DogTailWeld.C0 = CFrame.new(0, -0.75, 0.8) * CFrame.Angles(math.rad(45), wagAngle, 0)
+            -- Hännän heilutus
+            if dogTailWeld and dogTailWeld.Parent then
+                local wagSpeed = isMoving and 20 or 9
+                dogTailWeld.C0 = CFrame.new(0, -0.7, 0.65) * CFrame.Angles(math.rad(45), math.sin(globalTime * wagSpeed) * math.rad(35), 0)
             end
 
-        -- 3. PUPU (AITO MATALA KYYRYASENTO & HYPPYKAARI)
+        -- =============================================================
+        -- 3. PUPU (Aito matala kyyristyminen, loikkimiskaari & etutassut)
+        -- =============================================================
         elseif currentAnimMode == "Rabbit" then
             if isMoving then
                 rabbitHopTimer = (rabbitHopTimer + deltaTime * (speed * 0.65)) % (math.pi * 2)
                 local hopArc = math.abs(math.sin(rabbitHopTimer))
-                local hopPitch = math.sin(rabbitHopTimer) * math.rad(22)
+                local hopPitch = math.sin(rabbitHopTimer) * math.rad(18)
                 local kick = math.sin(rabbitHopTimer)
 
-                setJoint(root, CFrame.new(0, hopArc * 0.9, 0) * CFrame.Angles(math.rad(-36) + hopPitch, 0, 0))
+                -- Loikkimiskaari nousee ja laskeutuu aina takaisin maahan
+                setJoint(root, CFrame.new(0, -0.4 + (hopArc * 0.8), 0) * CFrame.Angles(math.rad(-34) + hopPitch, 0, 0))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.Angles(math.rad(30) - hopPitch * 0.5, 0, 0))
+                setJoint(neck, CFrame.Angles(math.rad(28) - hopPitch * 0.5, 0, 0))
 
-                setJoint(rShoulder, CFrame.Angles(math.rad(52) + kick * math.rad(18), 0, math.rad(-14)))
-                setJoint(lShoulder, CFrame.Angles(math.rad(52) + kick * math.rad(18), 0, math.rad(14)))
+                setJoint(rShoulder, CFrame.Angles(math.rad(48) + kick * math.rad(16), 0, math.rad(-14)))
+                setJoint(lShoulder, CFrame.Angles(math.rad(48) + kick * math.rad(16), 0, math.rad(14)))
 
-                local legKick = (kick < 0 and -kick * math.rad(50)) or (kick * math.rad(18))
-                setJoint(rHip, CFrame.Angles(math.rad(-25) - legKick, 0, math.rad(6)))
-                setJoint(lHip, CFrame.Angles(math.rad(-25) - legKick, 0, math.rad(-6)))
+                local legKick = (kick < 0 and -kick * math.rad(48)) or (kick * math.rad(14))
+                setJoint(rHip, CFrame.Angles(math.rad(-22) - legKick, 0, math.rad(5)))
+                setJoint(lHip, CFrame.Angles(math.rad(-22) - legKick, 0, math.rad(-5)))
             else
-                local twitch = math.sin(globalTime * 20) * math.rad(3)
-                local breath = math.sin(globalTime * 4) * math.rad(2)
-                setJoint(root, CFrame.Angles(math.rad(-38) + breath, 0, 0))
-                if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.Angles(math.rad(32) + twitch, twitch * 0.6, 0))
+                -- Paikallaan istuva kyyry, nenän nopea pupunykäys
+                local twitch = math.sin(globalTime * 22) * math.rad(2.5)
+                local breath = math.sin(globalTime * 4) * math.rad(1.5)
 
-                setJoint(rShoulder, CFrame.Angles(math.rad(58), 0, math.rad(-14)))
-                setJoint(lShoulder, CFrame.Angles(math.rad(58), 0, math.rad(14)))
-                setJoint(rHip, CFrame.Angles(math.rad(-30), 0, math.rad(6)))
-                setJoint(lHip, CFrame.Angles(-math.rad(-30), 0, math.rad(-6)))
+                setJoint(root, CFrame.new(0, -0.45, 0) * CFrame.Angles(math.rad(-36) + breath, 0, 0))
+                if waist then setJoint(waist, CFrame.identity) end
+                setJoint(neck, CFrame.Angles(math.rad(30) + twitch, twitch * 0.5, 0))
+
+                -- Etutassut rinnan alla
+                setJoint(rShoulder, CFrame.Angles(math.rad(52), 0, math.rad(-14)))
+                setJoint(lShoulder, CFrame.Angles(math.rad(52), 0, math.rad(14)))
+                setJoint(rHip, CFrame.Angles(math.rad(-28), 0, math.rad(5)))
+                setJoint(lHip, CFrame.Angles(math.rad(-28), 0, math.rad(-5)))
             end
 
+            -- Koukistetut nivelet
+            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-55), 0, 0)) end
+            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-55), 0, 0)) end
+            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(45), 0, 0)) end
+            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(45), 0, 0)) end
+
+        -- =============================================================
+        -- 4. RAPU (Matala haara-asento maassa, sivusipsutus & sakset)
+        -- =============================================================
+        elseif currentAnimMode == "Crab" then
+            local clawSnap = math.sin(globalTime * 12) * math.rad(20)
+            local scuttle = math.sin(globalTime * (speed * 0.85)) * math.rad(20)
+            local bodyWobble = math.cos(globalTime * (speed * 0.85)) * math.rad(6)
+
+            -- Matala haara-asento maassa (ei seiso pystyssä)
+            setJoint(root, CFrame.new(0, -0.55, 0) * CFrame.Angles(math.rad(-24), 0, bodyWobble))
+            if waist then setJoint(waist, CFrame.identity) end
+            setJoint(neck, CFrame.Angles(math.rad(18), 0, 0))
+
+            -- SAKSET: Kädet koholla auki-kiinni napsuvina pihteinä
+            setJoint(rShoulder, CFrame.Angles(math.rad(38), 0, math.rad(70) + clawSnap))
+            setJoint(lShoulder, CFrame.Angles(math.rad(38), 0, -math.rad(70) - clawSnap))
+
+            -- JALAT: Levitetty leveälle sivuille maahan
+            if isMoving then
+                setJoint(rHip, CFrame.Angles(math.sin(globalTime * speed * 0.85) * math.rad(14), 0, math.rad(55) + scuttle))
+                setJoint(lHip, CFrame.Angles(-math.sin(globalTime * speed * 0.85) * math.rad(14), 0, -math.rad(55) + scuttle))
+            else
+                setJoint(rHip, CFrame.Angles(0, 0, math.rad(55)))
+                setJoint(lHip, CFrame.Angles(0, 0, -math.rad(55)))
+            end
+
+            -- Kyynärpäät taivutettu pihtimäisesti
             if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-45), 0, 0)) end
             if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-45), 0, 0)) end
-            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(35), 0, 0)) end
-            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(35), 0, 0)) end
+            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(45), 0, 0)) end
+            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(45), 0, 0)) end
 
-            local earTwitch = math.sin(globalTime * 18) * math.rad(5)
-            for _, data in ipairs(activeHatReanims) do
-                if data.Role == "RabbitEarR" and data.Att1 then
-                    data.Att1.CFrame = CFrame.new(0.35, 0.85, 0) * CFrame.Angles(math.rad(-10) + earTwitch, 0, math.rad(8))
-                elseif data.Role == "RabbitEarL" and data.Att1 then
-                    data.Att1.CFrame = CFrame.new(-0.35, 0.85, 0) * CFrame.Angles(math.rad(-10) - earTwitch, 0, math.rad(-8))
-                end
-            end
-
-        -- 4. RAPU (MATALA HAARA-ASENTO & SIVUSTASIPUTUS)
-        elseif currentAnimMode == "Crab" then
-            local clawSnap = math.sin(globalTime * 14) * math.rad(22)
-            local scuttle = math.sin(globalTime * (speed * 0.9)) * math.rad(24)
-            local bodyWobble = math.cos(globalTime * (speed * 0.9)) * math.rad(6)
-
-            setJoint(root, CFrame.Angles(math.rad(-20), 0, bodyWobble))
-            if waist then setJoint(waist, CFrame.identity) end
-            setJoint(neck, CFrame.Angles(math.rad(16), math.sin(globalTime * 3) * math.rad(10), 0))
-
-            setJoint(rShoulder, CFrame.Angles(math.rad(42), 0, math.rad(75) + clawSnap))
-            setJoint(lShoulder, CFrame.Angles(math.rad(42), 0, -math.rad(75) - clawSnap))
-
-            if isMoving then
-                setJoint(rHip, CFrame.Angles(math.sin(globalTime * speed * 0.9) * math.rad(16), 0, math.rad(48) + scuttle))
-                setJoint(lHip, CFrame.Angles(-math.sin(globalTime * speed * 0.9) * math.rad(16), 0, -math.rad(48) + scuttle))
-            else
-                setJoint(rHip, CFrame.Angles(0, 0, math.rad(48)))
-                setJoint(lHip, CFrame.Angles(0, 0, -math.rad(48)))
-            end
-
-            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-30), 0, 0)) end
-            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-30), 0, 0)) end
-            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(30), 0, 0)) end
-            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(30), 0, 0)) end
-
-            for _, data in ipairs(activeHatReanims) do
-                if data.Role == "CrabClawR" and data.Att1 then
-                    data.Att1.CFrame = CFrame.new(0, -1.2, 0) * CFrame.Angles(math.rad(90), clawSnap, 0)
-                elseif data.Role == "CrabClawL" and data.Att1 then
-                    data.Att1.CFrame = CFrame.new(0, -1.2, 0) * CFrame.Angles(math.rad(90), -clawSnap, 0)
-                end
-            end
-
-        -- 5. PSYCHO MONSTER (MATALA KÄSI & AITO MIKROVAPINA)
+        -- =============================================================
+        -- 5. PSYCHO MONSTER (Matala käsi, mikrovapina & kauhuelokuva-idle)
+        -- =============================================================
         elseif currentAnimMode == "Psycho" then
-            local armShake = math.sin(globalTime * 34) * math.rad(4.5) + math.cos(globalTime * 23) * math.rad(2.5)
+            -- Hermostunut mikrovapina (creepy high-frequency tremor)
+            local armShake = math.sin(globalTime * 34) * math.rad(4.5) + math.cos(globalTime * 23) * math.rad(2.2)
             local twitchCycle = math.sin(globalTime * 2.2)
             local suddenSnap = (twitchCycle > 0.93 and math.sin(globalTime * 36) * math.rad(12) or 0)
 
             if isFlying then
-                setJoint(root, CFrame.Angles(math.rad(15), 0, math.rad(-6)))
+                setJoint(root, CFrame.Angles(math.rad(12), 0, math.rad(-5)))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.Angles(math.rad(28) + suddenSnap, math.rad(22), math.rad(-18)))
-                setJoint(rShoulder, CFrame.Angles(math.rad(35) + armShake, 0, math.rad(28) + armShake))
-                setJoint(lShoulder, CFrame.Angles(math.rad(-10) + armShake * 0.5, 0, math.rad(-22)))
-                setJoint(rHip, CFrame.Angles(math.rad(10), 0, math.rad(8)))
-                setJoint(lHip, CFrame.Angles(math.rad(-12), 0, math.rad(-6)))
+                setJoint(neck, CFrame.Angles(math.rad(26) + suddenSnap, math.rad(20), math.rad(-16)))
+                setJoint(rShoulder, CFrame.Angles(math.rad(30) + armShake, 0, math.rad(24) + armShake))
+                setJoint(lShoulder, CFrame.Angles(math.rad(-10) + armShake * 0.5, 0, math.rad(-18)))
+                setJoint(rHip, CFrame.Angles(math.rad(8), 0, math.rad(6)))
+                setJoint(lHip, CFrame.Angles(math.rad(-10), 0, math.rad(-6)))
             elseif isMoving then
                 if speed > 18 then
+                    -- Petomainen ryntäys kynnet matalalla
                     local runT = globalTime * (speed * 0.8)
-                    local stride = math.sin(runT) * math.rad(45)
+                    local stride = math.sin(runT) * math.rad(42)
 
-                    setJoint(root, CFrame.Angles(math.rad(-28), 0, math.sin(runT) * math.rad(5)))
+                    setJoint(root, CFrame.Angles(math.rad(-26), 0, math.sin(runT) * math.rad(5)))
                     if waist then setJoint(waist, CFrame.identity) end
-                    setJoint(neck, CFrame.Angles(math.rad(25) + suddenSnap, math.sin(globalTime * 20) * math.rad(8), 0))
-                    setJoint(rShoulder, CFrame.Angles(math.rad(45) + armShake, 0, math.rad(18)))
-                    setJoint(lShoulder, CFrame.Angles(math.rad(35) - armShake, 0, math.rad(-18)))
+                    setJoint(neck, CFrame.Angles(math.rad(22) + suddenSnap, math.sin(globalTime * 20) * math.rad(6), 0))
+                    setJoint(rShoulder, CFrame.Angles(math.rad(38) + armShake, 0, math.rad(16)))
+                    setJoint(lShoulder, CFrame.Angles(math.rad(28) - armShake, 0, math.rad(-16)))
                     setJoint(rHip, CFrame.Angles(stride, 0, 0))
                     setJoint(lHip, CFrame.Angles(-stride, 0, 0))
                 else
+                    -- Epäsymmetrinen ontuva laahaus
                     local walkT = globalTime * 6
                     local step = math.sin(walkT)
 
-                    setJoint(root, CFrame.Angles(math.rad(-12), step * math.rad(5), math.rad(-6)))
+                    setJoint(root, CFrame.Angles(math.rad(-10), step * math.rad(4), math.rad(-5)))
                     if waist then setJoint(waist, CFrame.identity) end
-                    setJoint(neck, CFrame.Angles(math.rad(18) + suddenSnap, math.rad(24) + suddenSnap, math.rad(-20)))
-                    setJoint(rShoulder, CFrame.Angles(math.rad(22) + armShake + (step * math.rad(12)), 0, math.rad(14) + armShake))
-                    setJoint(lShoulder, CFrame.Angles(math.rad(-12) - (step * math.rad(8)), 0, math.rad(-14)))
-                    setJoint(rHip, CFrame.Angles(step * math.rad(38), 0, math.rad(4)))
-                    setJoint(lHip, CFrame.Angles(-step * math.rad(20), 0, math.rad(-4)))
+                    setJoint(neck, CFrame.Angles(math.rad(16) + suddenSnap, math.rad(22) + suddenSnap, math.rad(-18)))
+                    setJoint(rShoulder, CFrame.Angles(math.rad(20) + armShake + (step * math.rad(10)), 0, math.rad(12) + armShake))
+                    setJoint(lShoulder, CFrame.Angles(math.rad(-10) - (step * math.rad(6)), 0, math.rad(-12)))
+                    setJoint(rHip, CFrame.Angles(step * math.rad(35), 0, math.rad(4)))
+                    setJoint(lHip, CFrame.Angles(-step * math.rad(18), 0, math.rad(-4)))
                 end
             else
-                setJoint(root, CFrame.Angles(math.rad(-10), math.sin(globalTime * 1.5) * math.rad(3), math.rad(-5)))
+                -- Horror Idle: Käsi roikkuu matalalla etuviistossa voimakkaasti vapisten
+                setJoint(root, CFrame.Angles(math.rad(-8), math.sin(globalTime * 1.5) * math.rad(2.5), math.rad(-4)))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.Angles(math.rad(16) + suddenSnap, math.rad(26) + suddenSnap, math.rad(-24)))
-                setJoint(rShoulder, CFrame.Angles(math.rad(24) + armShake, 0, math.rad(14) + armShake))
-                setJoint(lShoulder, CFrame.Angles(math.rad(-8), 0, math.rad(-12) + (armShake * 0.3)))
-                setJoint(rHip, CFrame.Angles(math.rad(-4), 0, math.rad(5)))
-                setJoint(lHip, CFrame.Angles(math.rad(4), 0, math.rad(-5)))
+                setJoint(neck, CFrame.Angles(math.rad(14) + suddenSnap, math.rad(24) + suddenSnap, math.rad(-22)))
+                setJoint(rShoulder, CFrame.Angles(math.rad(20) + armShake, 0, math.rad(12) + armShake))
+                setJoint(lShoulder, CFrame.Angles(math.rad(-8), 0, math.rad(-10) + (armShake * 0.3)))
+                setJoint(rHip, CFrame.Angles(math.rad(-3), 0, math.rad(4)))
+                setJoint(lHip, CFrame.Angles(math.rad(3), 0, math.rad(-4)))
             end
 
-            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-25) + armShake, 0, 0)) end
-            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-8), 0, 0)) end
+            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-20) + armShake, 0, 0)) end
+            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-6), 0, 0)) end
             if rKnee then setJoint(rKnee, CFrame.identity) end
             if lKnee then setJoint(lKnee, CFrame.identity) end
         end
@@ -654,33 +549,37 @@ end
 local function setAnimationMode(newMode)
     currentAnimMode = newMode
     resetTransforms()
+    cleanupVisualProps()
 
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
 
+    -- Varmistetaan että hahmo ei koskaan leiju ilmassa (käytetään defaultHipHeightia)
     if hum then
-        if newMode == "Dog" then
-            hum.HipHeight = 0.75
-        elseif newMode == "Rabbit" then
-            hum.HipHeight = 0.85
-        elseif newMode == "Crab" then
-            hum.HipHeight = 0.85
-        elseif newMode == "Helicopter" then
-            hum.HipHeight = 2.4
+        local baseH = defaultHipHeight or 0
+        if newMode == "Helicopter" then
+            hum.HipHeight = baseH + 3.0 -- Vain helikopteri leijuu ilmassa
         else
-            hum.HipHeight = 2.0
+            hum.HipHeight = baseH       -- Kaikki muut pysyvät tiukasti maassa
+        end
+
+        if newMode == "Dog" then
+            setupDogProps(char)
+        elseif newMode == "Rabbit" then
+            setupRabbitProps(char)
         end
     end
 
     if char then
         local animate = char:FindFirstChild("Animate")
-        if animate then animate.Enabled = (newMode == "None") end
-        setupHatRoles(char, newMode)
+        if animate then
+            animate.Enabled = (newMode == "None")
+        end
     end
 end
 
 -- ====================================================================
--- 6. FLY SUBSYSTEM (Infinite Yield Pure Model)
+-- 6. FLY SUBSYSTEM (Infinite Yield Pure Physics Model)
 -- ====================================================================
 local function startFlying(character)
     if isFlying then return end
@@ -1434,18 +1333,10 @@ local _, heliPill, heliPillStroke = createDashboardCard("HeliCard", "Helicopter"
 heliPill.MouseButton1Click:Connect(function()
     if currentAnimMode ~= "Helicopter" then
         setAnimationMode("Helicopter")
-        if not isFlying then
-            startFlying(LocalPlayer.Character)
-            setPillVisual(flyPill, flyPillStroke, true)
-        end
         updateAnimPills("Helicopter")
-        notify("Mode", "Helicopter ON")
+        notify("Mode", "Helicopter ON (Hovering)")
     else
         setAnimationMode("Psycho")
-        if isFlying then
-            stopFlying(LocalPlayer.Character)
-            setPillVisual(flyPill, flyPillStroke, false)
-        end
         updateAnimPills("Psycho")
         notify("Mode", "Helicopter OFF")
     end
@@ -1541,17 +1432,15 @@ local function terminateScript()
         pcall(function() procAnimConnection:Disconnect() end)
         procAnimConnection = nil
     end
-    if netlessConnection then
-        pcall(function() netlessConnection:Disconnect() end)
-        netlessConnection = nil
-    end
 
     pcall(resetTransforms)
-    pcall(cleanupHatReanimation)
+    pcall(cleanupVisualProps)
 
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.HipHeight = 2.0 end
+        if hum and defaultHipHeight ~= nil then
+            hum.HipHeight = defaultHipHeight
+        end
         local animate = char:FindFirstChild("Animate")
         if animate then animate.Enabled = true end
     end
@@ -1585,6 +1474,11 @@ local function init(character)
     stopNoclip(character)
     stopInvisible(character)
     isClickTpActive = false
+
+    local hum = character:WaitForChild("Humanoid", 5)
+    if hum then
+        defaultHipHeight = hum.HipHeight
+    end
 
     if uiSwitches.Fly then setPillVisual(uiSwitches.Fly.Pill, uiSwitches.Fly.Stroke, false) end
     if uiSwitches.ClickTP then setPillVisual(uiSwitches.ClickTP.Pill, uiSwitches.ClickTP.Stroke, false) end
