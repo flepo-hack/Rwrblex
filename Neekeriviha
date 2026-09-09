@@ -1,6 +1,6 @@
 -- ====================================================================
--- PROCEDURAL MOTOR6D TRANSFORM ENGINE + EXPLOIT SUITE (V9.0 MASTER)
--- 100% FE Kinematics, Point-Blank Scary Fling & Embedded Anatomy
+-- PROCEDURAL MOTOR6D TRANSFORM ENGINE + EXPLOIT SUITE (V10.0 MASTER)
+-- 100% FE Kinematics, Point-Blank Scary Fling & Fixed Physics Engine
 -- Platform: Universal (PC Mouse/Keyboard & Mobile Touch)
 -- Credit: Made by JZ
 -- ====================================================================
@@ -78,7 +78,7 @@ local scaryTargetPlayer = nil
 local scaryPunchPhase = 0 -- 0: Normaali, 1: Lataus taakse, 2: Räjähtävä isku
 local activeTargetHighlight = nil
 
--- Juoksuajan seuranta
+-- Juoksuajan seuranta Psycho-animaatiota varten
 local continuousMoveTime = 0
 
 -- Animaatiotilat: "None", "Psycho", "Helicopter", "Dog", "Rabbit"
@@ -346,7 +346,7 @@ local function startProceduralEngine(character)
         local lKnee = JointCache.LeftKnee
 
         -- =============================================================
-        -- 1. HELIKOPTERI (Nostettu pääroottori, pystysuora peräpotkuri)
+        -- 1. HELIKOPTERI (Näkyvä selkämasto, nostetut lavat & pystyperä)
         -- =============================================================
         if currentAnimMode == "Helicopter" then
             local isAirborne = (isFlying or currentAnimMode == "Helicopter")
@@ -364,15 +364,15 @@ local function startProceduralEngine(character)
             -- Pää upotettu rinnan sisään virtaviivaiseksi ohjaamoksi
             setJoint(neck, CFrame.new(0, -0.35, 0.15) * CFrame.Angles(math.rad(82) - forwardTilt, 0, 0))
 
-            -- ROOTTORIMASTO: Nousee selän keskeltä pystyyn roottorin akseliksi
-            setJoint(rHip, CFrame.new(0, 0.25, 1.0) * CFrame.Angles(math.rad(90), 0, 0))
+            -- NÄKYVÄ ROOTTORIMASTO: Oikea jalka nousee selän keskeltä pystyyn kiinteäksi akseliksi
+            setJoint(rHip, CFrame.new(-0.5, 1.0, 0.6) * CFrame.Angles(math.rad(90), 0, 0))
 
-            -- PÄÄROOTTORIN LAVAT: Nostettu reilusti ylemmäs selästä (ei leikkaa runkoa)
-            setJoint(rShoulder, CFrame.new(-0.9, 0.2, 1.75) * CFrame.Angles(0, 0, rotorAngle + (math.pi / 2)))
-            setJoint(lShoulder, CFrame.new(0.9, 0.2, 1.75) * CFrame.Angles(0, 0, rotorAngle - (math.pi / 2)))
+            -- PÄÄROOTTORIN LAVAT: Kädet kiinnittyvät suoraan maston päähän korkealle selän ylle
+            setJoint(rShoulder, CFrame.new(-0.85, 0.2, 1.85) * CFrame.Angles(0, 0, rotorAngle + (math.pi / 2)))
+            setJoint(lShoulder, CFrame.new(0.85, 0.2, 1.85) * CFrame.Angles(0, 0, rotorAngle - (math.pi / 2)))
 
-            -- PERÄPUOMI & PYSTYROOTTORI: Pyörii puomin kyljessä aidosti pystytasossa (ylös-alas)
-            setJoint(lHip, CFrame.new(0.35, -2.0, 0.1) * CFrame.Angles(tailRotorAngle, 0, 0))
+            -- PERÄPUOMI & PYSTYROOTTORI: Vasen jalka tuotu lähelle torson perää, pyörii puomin kyljessä pystytasossa
+            setJoint(lHip, CFrame.new(0.25, -1.2, 0.1) * CFrame.Angles(tailRotorAngle, 0, 0))
 
             if rElbow then setJoint(rElbow, CFrame.identity) end
             if lElbow then setJoint(lElbow, CFrame.identity) end
@@ -380,16 +380,16 @@ local function startProceduralEngine(character)
             if lKnee then setJoint(lKnee, CFrame.identity) end
 
         -- =============================================================
-        -- 2. KOIRA (Kädet torson sisältä pään läpi korviksi, jalat vatsan alta)
+        -- 2. KOIRA (Matalalla maassa, tassut alaspäin, aito istuminen)
         -- =============================================================
         elseif currentAnimMode == "Dog" then
             if isJumping then
-                setJoint(root, CFrame.new(0, -0.5, 0) * CFrame.Angles(math.rad(-65), 0, 0))
+                setJoint(root, CFrame.new(0, -0.45, 0) * CFrame.Angles(math.rad(-65), 0, 0))
                 if waist then setJoint(waist, CFrame.identity) end
                 setJoint(neck, CFrame.new(0, 0.2, 0.15) * CFrame.Angles(math.rad(70), 0, 0))
 
-                setJoint(rShoulder, CFrame.new(-0.75, -0.3, -0.15) * CFrame.Angles(math.rad(95), 0, math.rad(-8)))
-                setJoint(lShoulder, CFrame.new(0.75, -0.3, -0.15) * CFrame.Angles(math.rad(95), 0, math.rad(8)))
+                setJoint(rShoulder, CFrame.new(-0.75, -0.2, -0.15) * CFrame.Angles(math.rad(85), 0, math.rad(-8)))
+                setJoint(lShoulder, CFrame.new(0.75, -0.2, -0.15) * CFrame.Angles(math.rad(85), 0, math.rad(8)))
                 setJoint(rHip, CFrame.new(-0.25, 0.65, -0.2) * CFrame.Angles(math.rad(25), 0, math.rad(6)))
                 setJoint(lHip, CFrame.new(0.25, 0.65, -0.2) * CFrame.Angles(math.rad(25), 0, math.rad(-6)))
 
@@ -399,125 +399,126 @@ local function startProceduralEngine(character)
                 local diag2 = -diag1
                 local spineBob = math.sin(trotT * 2) * math.rad(2.5)
 
-                setJoint(root, CFrame.new(0, -0.92, 0) * CFrame.Angles(math.rad(-84) + spineBob, 0, 0))
+                setJoint(root, CFrame.new(0, -0.65, 0) * CFrame.Angles(math.rad(-84) + spineBob, 0, 0))
                 if waist then setJoint(waist, CFrame.identity) end
 
                 local headTurn = math.sin(trotT) * math.rad(4)
                 setJoint(neck, CFrame.new(0, 0.2, 0.15) * CFrame.Angles(math.rad(78), headTurn, 0))
 
-                -- KÄDET: Siirretty torson keskilinjaan ja taaksepäin rinnan sisään (eivät tule päästä)
-                setJoint(rShoulder, CFrame.new(-0.75, -0.3, -0.15) * CFrame.Angles(math.rad(115) + diag1, 0, math.rad(-8)))
-                setJoint(lShoulder, CFrame.new(0.75, -0.3, -0.15) * CFrame.Angles(math.rad(115) + diag2, 0, math.rad(8)))
+                -- ETUTASSUT: Tulevat rinnan sisältä ja osoittavat suoraan maahan
+                setJoint(rShoulder, CFrame.new(-0.75, -0.2, -0.1) * CFrame.Angles(math.rad(82) + diag1, 0, math.rad(-6)))
+                setJoint(lShoulder, CFrame.new(0.75, -0.2, -0.1) * CFrame.Angles(math.rad(82) + diag2, 0, math.rad(6)))
 
-                -- TAKAJALAT: Vedetty syvälle vatsan alle torson suojaan (selkä peittää ne lähes kokonaan)
-                setJoint(rHip, CFrame.new(-0.25, 0.65, -0.25) * CFrame.Angles(math.rad(72) + diag2, 0, math.rad(6)))
-                setJoint(lHip, CFrame.new(0.25, 0.65, -0.25) * CFrame.Angles(math.rad(72) + diag1, 0, math.rad(-6)))
+                -- TAKAJALAT: Upotettu syvälle vatsan alle, selkä peittää ne lähes kokonaan
+                setJoint(rHip, CFrame.new(-0.25, 0.65, -0.2) * CFrame.Angles(math.rad(76) + diag2, 0, math.rad(6)))
+                setJoint(lHip, CFrame.new(0.25, 0.65, -0.2) * CFrame.Angles(math.rad(76) + diag1, 0, math.rad(-6)))
 
             else
                 -- KOIRAMAISEN ISTUMINEN (Idle Sit)
-                setJoint(root, CFrame.new(0, -0.75, 0) * CFrame.Angles(math.rad(-48), 0, 0))
+                setJoint(root, CFrame.new(0, -0.5, 0) * CFrame.Angles(math.rad(-45), 0, 0))
                 if waist then setJoint(waist, CFrame.identity) end
 
                 local lookAround = math.sin(globalTime * 1.5) * math.rad(8)
                 setJoint(neck, CFrame.new(0, 0.2, 0.15) * CFrame.Angles(math.rad(45), lookAround, 0))
 
                 local earTwitch = math.sin(globalTime * 3) * math.rad(3)
-                setJoint(rShoulder, CFrame.new(-0.75, -0.3, -0.15) * CFrame.Angles(math.rad(72) + earTwitch, 0, math.rad(-8)))
-                setJoint(lShoulder, CFrame.new(0.75, -0.3, -0.15) * CFrame.Angles(math.rad(72) - earTwitch, 0, math.rad(8)))
+                setJoint(rShoulder, CFrame.new(-0.75, -0.2, -0.1) * CFrame.Angles(math.rad(48) + earTwitch, 0, math.rad(-6)))
+                setJoint(lShoulder, CFrame.new(0.75, -0.2, -0.1) * CFrame.Angles(math.rad(48) - earTwitch, 0, math.rad(6)))
 
-                setJoint(rHip, CFrame.new(-0.25, 0.65, -0.2) * CFrame.Angles(math.rad(15), 0, math.rad(8)))
-                setJoint(lHip, CFrame.new(0.25, 0.65, -0.2) * CFrame.Angles(math.rad(15), 0, math.rad(-8)))
+                setJoint(rHip, CFrame.new(-0.25, 0.65, -0.15) * CFrame.Angles(math.rad(15), 0, math.rad(6)))
+                setJoint(lHip, CFrame.new(0.25, 0.65, -0.15) * CFrame.Angles(math.rad(15), 0, math.rad(-6)))
             end
 
-            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-135), 0, 0)) end
-            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-135), 0, 0)) end
-            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(55), 0, 0)) end
-            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(55), 0, 0)) end
+            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-25), 0, 0)) end
+            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-25), 0, 0)) end
+            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(35), 0, 0)) end
+            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(35), 0, 0)) end
 
         -- =============================================================
-        -- 3. PUPU (Syvälle upotetut jalat, peräylitys & kädet korvina)
+        -- 3. PUPU (Istuu kyyryssä maassa, tassut alaspäin, napakka loikka)
         -- =============================================================
         elseif currentAnimMode == "Rabbit" then
             if isJumping then
-                setJoint(root, CFrame.new(0, -0.4, -0.35) * CFrame.Angles(math.rad(-25), 0, 0))
+                setJoint(root, CFrame.new(0, -0.35, -0.3) * CFrame.Angles(math.rad(-20), 0, 0))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.new(0, -0.15, 0.1) * CFrame.Angles(math.rad(25), 0, 0))
-                setJoint(rShoulder, CFrame.new(-0.75, -0.3, 0.05) * CFrame.Angles(math.rad(105), 0, math.rad(-6)))
-                setJoint(lShoulder, CFrame.new(0.75, -0.3, 0.05) * CFrame.Angles(math.rad(105), 0, math.rad(6)))
+                setJoint(neck, CFrame.new(0, -0.15, 0.1) * CFrame.Angles(math.rad(22), 0, 0))
+                setJoint(rShoulder, CFrame.new(-0.75, -0.2, 0.05) * CFrame.Angles(math.rad(55), 0, math.rad(-6)))
+                setJoint(lShoulder, CFrame.new(0.75, -0.2, 0.05) * CFrame.Angles(math.rad(55), 0, math.rad(6)))
                 setJoint(rHip, CFrame.new(-0.25, 0.65, 0.15) * CFrame.Angles(math.rad(15), 0, math.rad(5)))
                 setJoint(lHip, CFrame.new(0.25, 0.65, 0.15) * CFrame.Angles(math.rad(15), 0, math.rad(-5)))
 
             elseif isMoving then
                 rabbitHopTimer = (rabbitHopTimer + deltaTime * (speed * 0.65)) % (math.pi * 2)
                 local hopArc = math.abs(math.sin(rabbitHopTimer))
-                local hopPitch = math.sin(rabbitHopTimer) * math.rad(18)
+                local hopPitch = math.sin(rabbitHopTimer) * math.rad(16)
                 local kick = math.sin(rabbitHopTimer)
 
-                -- Torso siirretty eteenpäin: pyöreä perä ylittää syvälle vatsaan kätketyt takajalat
-                setJoint(root, CFrame.new(0, -0.75 + (hopArc * 0.75), -0.45) * CFrame.Angles(math.rad(-40) + hopPitch, 0, 0))
+                -- Torso eteenpäin: pyöreä perä ylittää syvälle kätketyt takajalat
+                setJoint(root, CFrame.new(0, -0.55 + (hopArc * 0.7), -0.4) * CFrame.Angles(math.rad(-30) + hopPitch, 0, 0))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.new(0, -0.15, 0.1) * CFrame.Angles(math.rad(32) - hopPitch * 0.5, 0, 0))
+                setJoint(neck, CFrame.new(0, -0.15, 0.1) * CFrame.Angles(math.rad(26) - hopPitch * 0.5, 0, 0))
 
-                setJoint(rShoulder, CFrame.new(-0.75, -0.3, 0.0) * CFrame.Angles(math.rad(125) + kick * math.rad(14), 0, math.rad(-6)))
-                setJoint(lShoulder, CFrame.new(0.75, -0.3, 0.0) * CFrame.Angles(math.rad(125) + kick * math.rad(14), 0, math.rad(6)))
+                setJoint(rShoulder, CFrame.new(-0.75, -0.2, 0.0) * CFrame.Angles(math.rad(50) + kick * math.rad(15), 0, math.rad(-6)))
+                setJoint(lShoulder, CFrame.new(0.75, -0.2, 0.0) * CFrame.Angles(math.rad(50) + kick * math.rad(15), 0, math.rad(6)))
 
-                local legKick = (kick < 0 and -kick * math.rad(46)) or (kick * math.rad(14))
-                setJoint(rHip, CFrame.new(-0.25, 0.65, 0.15) * CFrame.Angles(math.rad(-26) - legKick, 0, math.rad(5)))
-                setJoint(lHip, CFrame.new(0.25, 0.65, 0.15) * CFrame.Angles(math.rad(-26) - legKick, 0, math.rad(-5)))
+                local legKick = (kick < 0 and -kick * math.rad(40)) or (kick * math.rad(12))
+                setJoint(rHip, CFrame.new(-0.25, 0.65, 0.15) * CFrame.Angles(math.rad(-22) - legKick, 0, math.rad(5)))
+                setJoint(lHip, CFrame.new(0.25, 0.65, 0.15) * CFrame.Angles(math.rad(-22) - legKick, 0, math.rad(-5)))
 
             else
                 local twitch = math.sin(globalTime * 22) * math.rad(2.5)
                 local breath = math.sin(globalTime * 4) * math.rad(1.5)
 
-                -- Kompakti kyyristynyt pallo maassa
-                setJoint(root, CFrame.new(0, -0.85, -0.45) * CFrame.Angles(math.rad(-45) + breath, 0, 0))
+                -- Pupu istuu pystyssä kyyryssä maassa (ei makaa vatsallaan)
+                setJoint(root, CFrame.new(0, -0.55, -0.35) * CFrame.Angles(math.rad(-28) + breath, 0, 0))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.new(0, -0.15, 0.1) * CFrame.Angles(math.rad(36) + twitch, twitch * 0.5, 0))
+                setJoint(neck, CFrame.new(0, -0.15, 0.1) * CFrame.Angles(math.rad(26) + twitch, twitch * 0.5, 0))
 
-                setJoint(rShoulder, CFrame.new(-0.75, -0.3, 0.0) * CFrame.Angles(math.rad(125), 0, math.rad(-6)))
-                setJoint(lShoulder, CFrame.new(0.75, -0.3, 0.0) * CFrame.Angles(math.rad(125), 0, math.rad(6)))
+                -- Etutassut osoittavat suoraan maahan rinnan alle
+                setJoint(rShoulder, CFrame.new(-0.75, -0.2, 0.0) * CFrame.Angles(math.rad(48), 0, math.rad(-6)))
+                setJoint(lShoulder, CFrame.new(0.75, -0.2, 0.0) * CFrame.Angles(math.rad(48), 0, math.rad(6)))
 
-                setJoint(rHip, CFrame.new(-0.25, 0.65, 0.15) * CFrame.Angles(math.rad(-30), 0, math.rad(5)))
-                setJoint(lHip, CFrame.new(0.25, 0.65, 0.15) * CFrame.Angles(math.rad(-30), 0, math.rad(-5)))
+                -- Takajalat syvällä torson sisään kätkettynä
+                setJoint(rHip, CFrame.new(-0.25, 0.65, 0.15) * CFrame.Angles(math.rad(-25), 0, math.rad(5)))
+                setJoint(lHip, CFrame.new(0.25, 0.65, 0.15) * CFrame.Angles(math.rad(-25), 0, math.rad(-5)))
             end
 
-            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-135), 0, 0)) end
-            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-135), 0, 0)) end
-            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(55), 0, 0)) end
-            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(55), 0, 0)) end
+            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-35), 0, 0)) end
+            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-35), 0, 0)) end
+            if rKnee then setJoint(rKnee, CFrame.Angles(math.rad(45), 0, 0)) end
+            if lKnee then setJoint(lKnee, CFrame.Angles(math.rad(45), 0, 0)) end
 
         -- =============================================================
-        -- 4. PSYCHO MONSTER & SCARY FLING (Ammuttu jalka & Tuskajuoksu)
+        -- 4. PSYCHO MONSTER & SCARY FLING (Ammuttu jalka & Hallittu juoksu)
         -- =============================================================
         elseif currentAnimMode == "Psycho" then
             local tremor = (math.sin(globalTime * 38) * 0.65 + math.cos(globalTime * 27) * 0.35 + math.sin(globalTime * 58) * 0.2) * math.rad(5.5)
             local twitchCycle = math.sin(globalTime * 2.2)
             local suddenSnap = (twitchCycle > 0.94 and math.sin(globalTime * 40) * math.rad(16) or 0)
             local breath = (math.sin(globalTime * 2.3) * 0.7 + math.cos(globalTime * 4.1) * 0.3) * math.rad(2.5)
-            local randomSway = math.sin(globalTime * 0.7) * math.rad(4)
+            local randomSway = math.sin(globalTime * 0.7) * math.rad(3.5)
 
             if scaryPunchPhase == 1 then
-                -- SCARY FLING: Nyrkin lataus ja jännitys taakse olkapään taakse
-                setJoint(root, CFrame.Angles(math.rad(-12), math.rad(-35), 0))
+                -- SCARY FLING: Nyrkin lataus taakse olkapään taakse
+                setJoint(root, CFrame.Angles(math.rad(-10), math.rad(-30), 0))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.Angles(math.rad(10), math.rad(30), 0))
+                setJoint(neck, CFrame.Angles(math.rad(8), math.rad(25), 0))
                 setJoint(rShoulder, CFrame.Angles(math.rad(-45), 0, math.rad(25)))
-                setJoint(lShoulder, CFrame.Angles(math.rad(45), 0, math.rad(-15)))
-                setJoint(rHip, CFrame.Angles(math.rad(-15), 0, 0))
-                setJoint(lHip, CFrame.Angles(math.rad(25), 0, 0))
+                setJoint(lShoulder, CFrame.Angles(math.rad(40), 0, math.rad(-15)))
+                setJoint(rHip, CFrame.Angles(math.rad(-12), 0, 0))
+                setJoint(lHip, CFrame.Angles(math.rad(20), 0, 0))
 
             elseif scaryPunchPhase == 2 then
                 -- SCARY FLING: Räjähtävä nyrkin laukaisu suoraan kohteen naamaan
-                setJoint(root, CFrame.Angles(math.rad(-18), math.rad(25), 0))
+                setJoint(root, CFrame.Angles(math.rad(-14), math.rad(20), 0))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.Angles(math.rad(-15), math.rad(-15), 0))
-                setJoint(rShoulder, CFrame.Angles(math.rad(125), 0, math.rad(-12)))
-                setJoint(lShoulder, CFrame.Angles(math.rad(-45), 0, math.rad(-25)))
-                setJoint(rHip, CFrame.Angles(math.rad(35), 0, 0))
-                setJoint(lHip, CFrame.Angles(math.rad(-30), 0, 0))
+                setJoint(neck, CFrame.Angles(math.rad(-12), math.rad(-12), 0))
+                setJoint(rShoulder, CFrame.Angles(math.rad(120), 0, math.rad(-12)))
+                setJoint(lShoulder, CFrame.Angles(math.rad(-40), 0, math.rad(-20)))
+                setJoint(rHip, CFrame.Angles(math.rad(30), 0, 0))
+                setJoint(lHip, CFrame.Angles(math.rad(-25), 0, 0))
 
             elseif isScaryFlingActive and not isMoving then
-                -- SCARY FLING VAIHE 1: Pään raju vatkaus & käsien tärinä
                 local headSpasm = math.sin(globalTime * 70) * math.rad(35)
                 setJoint(root, CFrame.Angles(math.rad(-10), math.sin(globalTime * 30) * math.rad(5), 0))
                 if waist then setJoint(waist, CFrame.identity) end
@@ -547,46 +548,46 @@ local function startProceduralEngine(character)
 
             elseif isMoving then
                 if isAgonySprinting or speed > 20 then
-                    -- TUSKAINEN JUOKSU (> 1.5s): Vartalo tärisee ja kouristelee (ei liikaa lömpsymistä)
+                    -- TUSKAINEN JUOKSU (> 1.5s): Hallittu saalistusrynnäkkö (ei kaadu naamalleen)
                     local runT = globalTime * (speed * 0.85)
-                    local stride = math.sin(runT) * math.rad(46)
-                    local agonyTwitch = math.sin(globalTime * 28) * math.rad(5)
+                    local stride = math.sin(runT) * math.rad(44)
+                    local agonyTwitch = math.sin(globalTime * 26) * math.rad(4.5)
 
-                    setJoint(root, CFrame.Angles(math.rad(-30) + agonyTwitch, math.sin(runT) * math.rad(8), 0))
+                    setJoint(root, CFrame.Angles(math.rad(-14) + agonyTwitch, math.sin(runT) * math.rad(6), 0))
                     if waist then setJoint(waist, CFrame.identity) end
-                    setJoint(neck, CFrame.Angles(math.rad(24) + suddenSnap, math.sin(globalTime * 20) * math.rad(8), 0))
-                    setJoint(rShoulder, CFrame.Angles(math.rad(38) + tremor * 1.5, 0, math.rad(18) + agonyTwitch))
-                    setJoint(lShoulder, CFrame.Angles(math.rad(28) - tremor * 1.5, 0, math.rad(-18) - agonyTwitch))
+                    setJoint(neck, CFrame.Angles(math.rad(20) + suddenSnap, math.sin(globalTime * 18) * math.rad(6), 0))
+                    setJoint(rShoulder, CFrame.Angles(math.rad(36) + tremor * 1.5, 0, math.rad(16) + agonyTwitch))
+                    setJoint(lShoulder, CFrame.Angles(math.rad(26) - tremor * 1.5, 0, math.rad(-16) - agonyTwitch))
                     setJoint(rHip, CFrame.Angles(stride, 0, 0))
-                    setJoint(lHip, CFrame.Angles(-stride * 0.5 + agonyTwitch, 0, math.rad(8)))
+                    setJoint(lHip, CFrame.Angles(-stride * 0.55 + agonyTwitch, 0, math.rad(6)))
                 else
                     -- AMMUTUN JALAN ONTUVA KÄVELY: Toinen jalka pettää alta ja laahaa perässä
                     local walkT = globalTime * 5.8
                     local step = math.sin(walkT)
 
-                    local limpDip = (step < 0 and -math.abs(step) * 0.28) or (-math.abs(step) * 0.08)
-                    setJoint(root, CFrame.new(0, limpDip, 0) * CFrame.Angles(math.rad(-12), step * math.rad(5), math.rad(-8) * (step < 0 and 1.1 or 0.3)))
+                    local limpDip = (step < 0 and -math.abs(step) * 0.24) or (-math.abs(step) * 0.06)
+                    setJoint(root, CFrame.new(0, limpDip, 0) * CFrame.Angles(math.rad(-10), step * math.rad(4), math.rad(-6) * (step < 0 and 1.1 or 0.3)))
                     if waist then setJoint(waist, CFrame.identity) end
-                    setJoint(neck, CFrame.Angles(math.rad(18) + suddenSnap, math.rad(24) + suddenSnap, math.rad(-20)))
-                    setJoint(rShoulder, CFrame.Angles(math.rad(22) + tremor + (step * math.rad(8)), 0, math.rad(14) + tremor))
-                    setJoint(lShoulder, CFrame.Angles(math.rad(-12) - (step * math.rad(5)), 0, math.rad(-14)))
+                    setJoint(neck, CFrame.Angles(math.rad(16) + suddenSnap, math.rad(22) + suddenSnap, math.rad(-18)))
+                    setJoint(rShoulder, CFrame.Angles(math.rad(20) + tremor + (step * math.rad(7)), 0, math.rad(12) + tremor))
+                    setJoint(lShoulder, CFrame.Angles(math.rad(-10) - (step * math.rad(4)), 0, math.rad(-12)))
 
-                    setJoint(rHip, CFrame.Angles(step * math.rad(38), 0, math.rad(4)))
-                    setJoint(lHip, CFrame.Angles(-step * math.rad(16), 0, math.rad(-6)))
+                    setJoint(rHip, CFrame.Angles(step * math.rad(36), 0, math.rad(4)))
+                    setJoint(lHip, CFrame.Angles(-step * math.rad(14), 0, math.rad(-5)))
                 end
             else
                 -- Horror Idle: Luonnoton pään asento & satunnaisesti heilahteleva vartalo
-                setJoint(root, CFrame.Angles(math.rad(-10) + breath, math.sin(globalTime * 1.5) * math.rad(2.5) + randomSway, math.rad(-4)))
+                setJoint(root, CFrame.Angles(math.rad(-8) + breath, math.sin(globalTime * 1.5) * math.rad(2.5) + randomSway, math.rad(-4)))
                 if waist then setJoint(waist, CFrame.identity) end
-                setJoint(neck, CFrame.Angles(math.rad(16) + suddenSnap, math.rad(26) + suddenSnap, math.rad(-24)))
-                setJoint(rShoulder, CFrame.Angles(math.rad(22) + tremor, 0, math.rad(12) + tremor))
-                setJoint(lShoulder, CFrame.Angles(math.rad(-8), 0, math.rad(-14) + (tremor * 0.2)))
+                setJoint(neck, CFrame.Angles(math.rad(14) + suddenSnap, math.rad(24) + suddenSnap, math.rad(-22)))
+                setJoint(rShoulder, CFrame.Angles(math.rad(20) + tremor, 0, math.rad(10) + tremor))
+                setJoint(lShoulder, CFrame.Angles(math.rad(-8), 0, math.rad(-12) + (tremor * 0.2)))
                 setJoint(rHip, CFrame.Angles(math.rad(-4), 0, math.rad(4)))
                 setJoint(lHip, CFrame.Angles(math.rad(4), 0, math.rad(-4)))
             end
 
-            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-24) + tremor, 0, 0)) end
-            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-8), 0, 0)) end
+            if rElbow then setJoint(rElbow, CFrame.Angles(math.rad(-22) + tremor, 0, 0)) end
+            if lElbow then setJoint(lElbow, CFrame.Angles(math.rad(-6), 0, 0)) end
             if rKnee then setJoint(rKnee, CFrame.identity) end
             if lKnee then setJoint(lKnee, CFrame.identity) end
         end
@@ -603,7 +604,13 @@ local function setAnimationMode(newMode)
     local hum = char and char:FindFirstChildOfClass("Humanoid")
 
     if hum then
-        hum.HipHeight = defaultHipHeight or 0
+        if newMode == "Dog" then
+            hum.HipHeight = 0.45
+        elseif newMode == "Rabbit" then
+            hum.HipHeight = 0.55
+        else
+            hum.HipHeight = defaultHipHeight or 0
+        end
     end
 
     if newMode == "Helicopter" then
@@ -639,7 +646,7 @@ local function stopFlying(character)
 end
 
 -- ====================================================================
--- 7. TOUCH FLING (Puhdas Impulssi, 0 Ping, Ei lennätä itseä)
+-- 7. TOUCH FLING (Puhdas Vaakaimpulssi, 0 Ping, Ei nosta ilmaan)
 -- ====================================================================
 local function startFling(character)
     if isFlinging then return end
@@ -657,16 +664,17 @@ local function startFling(character)
         hrp.CanCollide = true
         local moveDir = humanoid.MoveDirection
         local flingDir = moveDir.Magnitude > 0.05 and moveDir.Unit or hrp.CFrame.LookVector
-        hrp.AssemblyLinearVelocity = flingDir * 11000 + Vector3.new(0, 4500, 0)
+        -- Vain vaakaimpulssi (Y = 0), jotta hahmo ei nouse ilmaan
+        hrp.AssemblyLinearVelocity = Vector3.new(flingDir.X * 12000, 0, flingDir.Z * 12000)
     end)
 
     flingRenderConn = RunService.RenderStepped:Connect(function()
         if not isFlinging or not hrp or not hrp.Parent then return end
         local vel = hrp.AssemblyLinearVelocity
         hrp.AssemblyLinearVelocity = Vector3.new(
-            math.clamp(vel.X, -60, 60),
-            math.clamp(vel.Y, -60, 60),
-            math.clamp(vel.Z, -60, 60)
+            math.clamp(vel.X, -25, 25),
+            math.clamp(vel.Y, -25, 25),
+            math.clamp(vel.Z, -25, 25)
         )
     end)
 end
@@ -1164,8 +1172,8 @@ scaryHeader.BorderSizePixel = 0
 scaryHeader.Parent = scaryListFrame
 
 local scaryHeaderCorner = Instance.new("UICorner")
-headerCorner.CornerRadius = UDim.new(0, 10)
-headerCorner.Parent = scaryHeader
+scaryHeaderCorner.CornerRadius = UDim.new(0, 10)
+scaryHeaderCorner.Parent = scaryHeader
 
 local scaryTitle = Instance.new("TextLabel")
 scaryTitle.Size = UDim2.new(1, -35, 1, 0)
@@ -1282,7 +1290,7 @@ local function executeScaryFling(targetPlayer)
         chargeSpeed = 56
     end
 
-    -- Kunnollinen alkukiihdytysimpulssi (boost)
+    -- Alkukiihdytysimpulssi (boost)
     myHrp.AssemblyLinearVelocity = myHrp.CFrame.LookVector * (chargeSpeed * 1.5)
 
     local startTime = os.clock()
@@ -1304,7 +1312,6 @@ local function executeScaryFling(targetPlayer)
         if heightDiff > 2.5 and dist < 35 then
             myHrp.AssemblyLinearVelocity = Vector3.new(delta.X * 1.5, math.clamp(heightDiff * 14, 45, 110), delta.Z * 1.5)
         else
-            -- Saalistava aaltoileva liike (ei täysin suora viiva)
             local rightVec = myHrp.CFrame.RightVector
             local waveOffset = rightVec * (math.sin(os.clock() * 9) * 1.6)
             local moveDir = (delta + waveOffset).Unit
@@ -1313,7 +1320,7 @@ local function executeScaryFling(targetPlayer)
 
         myHrp.CFrame = CFrame.lookAt(myHrp.Position, Vector3.new(targetPos.X, myHrp.Position.Y, targetPos.Z))
 
-        -- NYRKIN LATAUS: Kun lähestytään alle 7 studin päähän, käsi latautuu taakse
+        -- NYRKIN LATAUS: Kun lähestytään alle 7.5 studin päähän, käsi latautuu taakse
         if dist <= 7.5 and scaryPunchPhase == 0 then
             scaryPunchPhase = 1
         end
@@ -1331,7 +1338,7 @@ local function executeScaryFling(targetPlayer)
         local curTargetHrp = curTargetChar and curTargetChar:FindFirstChild("HumanoidRootPart")
 
         if curTargetHrp and myHrp then
-            -- PAKOTETAAN TÖRMÄYS PÄÄLLE: Ilman CanCollide = true Robloxin fysiikkamoottori ei siirrä impulssia!
+            -- TÖRMÄYS PÄÄLLE: Ilman CanCollide = true Robloxin fysiikkamoottori ei siirrä impulssia!
             myHrp.CanCollide = true
             local torso = myChar:FindFirstChild("Torso") or myChar:FindFirstChild("UpperTorso")
             if torso then torso.CanCollide = true end
@@ -1569,7 +1576,7 @@ flingPill.MouseButton1Click:Connect(function()
     if not isFlinging then
         startFling(LocalPlayer.Character)
         setPillVisual(flingPill, flingPillStroke, true)
-        notify("Fling", "Active (Zero Ping, Stable).")
+        notify("Fling", "Active (Zero Ping, Grounded).")
     else
         stopFling(LocalPlayer.Character)
         setPillVisual(flingPill, flingPillStroke, false)
@@ -1632,7 +1639,7 @@ heliPill.MouseButton1Click:Connect(function()
 end)
 uiSwitches.Helicopter = { Pill = heliPill, Stroke = heliPillStroke }
 
--- 8. Dog Mode (Embedded Belly Legs & Ears through Head)
+-- 8. Dog Mode (Embedded Belly Legs & Downward Paws)
 local _, dogPill, dogPillStroke = createDashboardCard("DogCard", "Dog", 8, false)
 dogPill.MouseButton1Click:Connect(function()
     if currentAnimMode ~= "Dog" then
@@ -1647,7 +1654,7 @@ dogPill.MouseButton1Click:Connect(function()
 end)
 uiSwitches.Dog = { Pill = dogPill, Stroke = dogPillStroke }
 
--- 9. Rabbit Mode (Deep Embedded Legs & Overhang Rump)
+-- 9. Rabbit Mode (Deep Embedded Legs & Upright Haunches)
 local _, rabbitPill, rabbitPillStroke = createDashboardCard("RabbitCard", "Rabbit", 9, false)
 rabbitPill.MouseButton1Click:Connect(function()
     if currentAnimMode ~= "Rabbit" then
@@ -1663,7 +1670,7 @@ end)
 uiSwitches.Rabbit = { Pill = rabbitPill, Stroke = rabbitPillStroke }
 
 -- 10. Psycho Monster Anim (Master-tier Horror)
-local _, psychoPill, psychoPillStroke = createDashboardCard("PsychoCard", "Psycho Anim", 9, false)
+local _, psychoPill, psychoPillStroke = createDashboardCard("PsychoCard", "Psycho Anim", 10, false)
 setPillVisual(psychoPill, psychoPillStroke, true)
 psychoPill.MouseButton1Click:Connect(function()
     if currentAnimMode == "Psycho" then
