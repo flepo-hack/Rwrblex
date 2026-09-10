@@ -1,6 +1,6 @@
 -- ====================================================================
--- PROCEDURAL MOTOR6D TRANSFORM ENGINE + EXPLOIT SUITE (V12.0 MASTER)
--- 100% FE Kinematics, Sustained Touch Fling & Elevated Rotor Engine
+-- PROCEDURAL MOTOR6D TRANSFORM ENGINE + EXPLOIT SUITE (V13.0 MASTER)
+-- 100% FE Kinematics, Sustained Touch Fling & Connected Rotor Mast
 -- Platform: Universal (PC Mouse/Keyboard & Mobile Touch)
 -- Credit: Made by JZ
 -- ====================================================================
@@ -345,7 +345,7 @@ local function startProceduralEngine(character)
         local lKnee = JointCache.LeftKnee
 
         -- =============================================================
-        -- 1. HELIKOPTERI (Nostettu masto & lavat Z = 2.1, ei läpimenovääristymää)
+        -- 1. HELIKOPTERI (Täsmälleen yhdistyvä masto ja lavat)
         -- =============================================================
         if currentAnimMode == "Helicopter" then
             local isAirborne = (isFlying or currentAnimMode == "Helicopter")
@@ -363,14 +363,14 @@ local function startProceduralEngine(character)
             -- Pää upotettu rinnan sisään virtaviivaiseksi ohjaamoksi
             setJoint(neck, CFrame.new(0, -0.35, 0.15) * CFrame.Angles(math.rad(82) - forwardTilt, 0, 0))
 
-            -- KIINTEÄ ROOTTORIMASTO: Oikea jalka nousee selän keskeltä pystyyn akseliksi
-            setJoint(rHip, CFrame.new(-0.5, 1.0, 0.6) * CFrame.Angles(math.rad(90), 0, 0))
+            -- KIINTEÄ ROOTTORIMASTO: Oikea jalka nousee selästä pisteeseen (0, 0.2, 2.3)
+            setJoint(rHip, CFrame.new(-0.5, 1.2, 0.5) * CFrame.Angles(math.rad(90), 0, 0))
 
-            -- PÄÄROOTTORIN LAVAT: Nostettu korkealle selän yläpuolelle (Z = 2.1, ei koskaan leikkaa vartaloa)
-            setJoint(rShoulder, CFrame.new(-0.85, 0.4, 2.1) * CFrame.Angles(0, 0, rotorAngle + (math.pi / 2)))
-            setJoint(lShoulder, CFrame.new(0.85, 0.4, 2.1) * CFrame.Angles(0, 0, rotorAngle - (math.pi / 2)))
+            -- PÄÄROOTTORIN LAVAT: Kiinnittyvät täsmälleen samaan pisteeseen (0, 0.2, 2.3) maston päähän
+            setJoint(rShoulder, CFrame.new(-1.0, -0.3, 2.3) * CFrame.Angles(0, 0, rotorAngle + (math.pi / 2)))
+            setJoint(lShoulder, CFrame.new(1.0, -0.3, 2.3) * CFrame.Angles(0, 0, rotorAngle - (math.pi / 2)))
 
-            -- PERÄPUOMI & PYSTYROOTTORI: Vasen jalka tuotu lähelle torson perää, pyörii pystytasossa
+            -- PERÄPUOMI & PYSTYROOTTORI: Vasen jalka puomina, pyörii puomin kyljessä pystytasossa
             setJoint(lHip, CFrame.new(0.2, -1.2, 0.1) * CFrame.Angles(tailRotorAngle, 0, 0))
 
             if rElbow then setJoint(rElbow, CFrame.identity) end
@@ -387,8 +387,8 @@ local function startProceduralEngine(character)
                 if waist then setJoint(waist, CFrame.identity) end
                 setJoint(neck, CFrame.new(0, 0.2, 0.15) * CFrame.Angles(math.rad(70), 0, 0))
 
-                setJoint(rShoulder, CFrame.new(-0.55, -0.1, -0.1) * CFrame.Angles(math.rad(85), 0, math.rad(-6)))
-                setJoint(lShoulder, CFrame.new(0.55, -0.1, -0.1) * CFrame.Angles(math.rad(85), 0, math.rad(6)))
+                setJoint(rShoulder, CFrame.new(-0.45, -0.1, -0.1) * CFrame.Angles(math.rad(85), 0, math.rad(-6)))
+                setJoint(lShoulder, CFrame.new(0.45, -0.1, -0.1) * CFrame.Angles(math.rad(85), 0, math.rad(6)))
                 setJoint(rHip, CFrame.new(-0.25, 0.6, -0.15) * CFrame.Angles(math.rad(25), 0, math.rad(6)))
                 setJoint(lHip, CFrame.new(0.25, 0.6, -0.15) * CFrame.Angles(math.rad(25), 0, math.rad(-6)))
 
@@ -404,9 +404,9 @@ local function startProceduralEngine(character)
                 local headTurn = math.sin(trotT) * math.rad(4)
                 setJoint(neck, CFrame.new(0, 0.2, 0.15) * CFrame.Angles(math.rad(78), headTurn, 0))
 
-                -- ETUTASSUT: Luonnollinen rinnan leveys, osoittavat suoraan maahan
-                setJoint(rShoulder, CFrame.new(-0.55, -0.1, -0.1) * CFrame.Angles(math.rad(82) + diag1, 0, math.rad(-6)))
-                setJoint(lShoulder, CFrame.new(0.55, -0.1, -0.1) * CFrame.Angles(math.rad(82) + diag2, 0, math.rad(6)))
+                -- ETUTASSUT: Luonnollinen etutassujen leveys, osoittavat suoraan maahan
+                setJoint(rShoulder, CFrame.new(-0.45, -0.1, -0.1) * CFrame.Angles(math.rad(82) + diag1, 0, math.rad(-6)))
+                setJoint(lShoulder, CFrame.new(0.45, -0.1, -0.1) * CFrame.Angles(math.rad(82) + diag2, 0, math.rad(6)))
 
                 -- TAKAJALAT: Vatsan alla suojassa, tulevat viistosti maahan
                 setJoint(rHip, CFrame.new(-0.25, 0.6, -0.15) * CFrame.Angles(math.rad(76) + diag2, 0, math.rad(6)))
@@ -421,8 +421,8 @@ local function startProceduralEngine(character)
                 setJoint(neck, CFrame.new(0, 0.2, 0.15) * CFrame.Angles(math.rad(45), lookAround, 0))
 
                 local earTwitch = math.sin(globalTime * 3) * math.rad(3)
-                setJoint(rShoulder, CFrame.new(-0.55, -0.1, -0.1) * CFrame.Angles(math.rad(48) + earTwitch, 0, math.rad(-6)))
-                setJoint(lShoulder, CFrame.new(0.55, -0.1, -0.1) * CFrame.Angles(math.rad(48) - earTwitch, 0, math.rad(6)))
+                setJoint(rShoulder, CFrame.new(-0.45, -0.1, -0.1) * CFrame.Angles(math.rad(48) + earTwitch, 0, math.rad(-6)))
+                setJoint(lShoulder, CFrame.new(0.45, -0.1, -0.1) * CFrame.Angles(math.rad(48) - earTwitch, 0, math.rad(6)))
 
                 setJoint(rHip, CFrame.new(-0.25, 0.6, -0.15) * CFrame.Angles(math.rad(15), 0, math.rad(6)))
                 setJoint(lHip, CFrame.new(0.25, 0.6, -0.15) * CFrame.Angles(math.rad(15), 0, math.rad(-6)))
@@ -645,7 +645,7 @@ local function stopFlying(character)
 end
 
 -- ====================================================================
--- 7. TOUCH FLING (Klassinen Impulssi, Ei liiku itsekseen, 0 Ping)
+-- 7. TOUCH FLING (Klassinen Impulssi, Toimii paikallaan, 0 Ping)
 -- ====================================================================
 local function startFling(character)
     if isFlinging then return end
@@ -668,7 +668,7 @@ local function startFling(character)
             local hum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
 
             if root and root.Parent and hum and hum.Health > 0 then
-                -- Suojattu baseline-nopeus: estää eksponentiaalisen ping-räjähdyksen
+                -- Suojattu baseline: estää eksponentiaalisen pingin räjähtämisen
                 local currentVel = root.AssemblyLinearVelocity
                 local safeVel = Vector3.new(
                     math.clamp(currentVel.X, -30, 30),
@@ -676,7 +676,7 @@ local function startFling(character)
                     math.clamp(currentVel.Z, -30, 30)
                 )
 
-                -- Klassinen pulssi: toimii myös paikallaan seistessä ilman liukumista
+                -- Klassinen pulssi: toimii seistessä ja liikkuessa ilman että liikuttaa hahmoa itsekseen
                 root.AssemblyLinearVelocity = safeVel * 500 + Vector3.new(0, 10000, 0)
                 RunService.RenderStepped:Wait()
 
@@ -1231,7 +1231,7 @@ scaryListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 scaryListLayout.Parent = scaryScroll
 
 -- ====================================================================
--- SCARY FLING CINEMATIC LOGIC (Point-Blank, Loikka ylös, Nyrkki, 0.7s Viive)
+-- SCARY FLING CINEMATIC LOGIC (Point-Blank, Noclip-Pois Iskussa, 1.5s Viive)
 -- ====================================================================
 local function executeScaryFling(targetPlayer)
     if isScaryFlingActive or not targetPlayer or targetPlayer == LocalPlayer then return end
@@ -1337,34 +1337,47 @@ local function executeScaryFling(targetPlayer)
         end
     end
 
-    -- VAIHE 3: Nyrkin räjähtävä laukaisu naamaan & Kestitetty Fling (Pysähtyminen maahan)
+    -- VAIHE 3: Nyrkin laukaisu & KESTITETTY FLING (100% Heitto-osuma)
     if reached then
         local curTargetChar = targetPlayer.Character
         local curTargetHrp = curTargetChar and curTargetChar:FindFirstChild("HumanoidRootPart")
 
         if curTargetHrp and myHrp then
-            -- TÖRMÄYS PÄÄLLE: Ilman CanCollide = true Robloxin fysiikkamoottori ei siirrä impulssia!
-            myHrp.CanCollide = true
-            local torso = myChar:FindFirstChild("Torso") or myChar:FindFirstChild("UpperTorso")
-            if torso then torso.CanCollide = true end
+            -- SAMMUTETAAN NOCLIP ENNEN ISKUA JA KYTKETÄÄN TÖRMÄYS PÄÄLLE!
+            -- Tämä takaa että Robloxin fysiikkamoottori suorittaa törmäyslaskennan toiseen pelaajaan!
+            stopNoclip(myChar)
+            for _, p in ipairs(myChar:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = true end
+            end
 
             -- LAUKAISTAAN NYRKKI ETEENPÄIN
             scaryPunchPhase = 2
-            local attackDir = (curTargetHrp.Position - myHrp.Position).Unit
-            myHrp.CFrame = CFrame.lookAt(myHrp.Position, curTargetHrp.Position)
             local impactCFrame = myHrp.CFrame
 
-            -- KESTITETTY FLING (0.25 sekuntia): Varmistaa että serverin fysiikkatick rekisteröi osuman!
-            local flingEndTime = os.clock() + 0.25
+            -- AJETAAN SAMA TOIMIVA FLING-PULSSI 0.35 SEKUNNIN AJAN KOHTEEN PÄÄLLÄ
+            local flingEndTime = os.clock() + 0.35
             while os.clock() < flingEndTime do
                 RunService.Heartbeat:Wait()
-                if not curTargetHrp or not myHrp then break end
-                myHrp.CanCollide = true
-                myHrp.AssemblyLinearVelocity = (attackDir * 25000) + Vector3.new(0, 10000, 0)
-                myHrp.AssemblyAngularVelocity = Vector3.new(0, 25000, 0)
+                if not curTargetHrp or not myHrp or not myHrp.Parent then break end
+
+                local curVel = myHrp.AssemblyLinearVelocity
+                local safeVel = Vector3.new(
+                    math.clamp(curVel.X, -30, 30),
+                    math.clamp(curVel.Y, -30, 30),
+                    math.clamp(curVel.Z, -30, 30)
+                )
+
+                -- Lukitaan osumakohtaan ja ammutaan sama todistettu heittopulssi
+                myHrp.CFrame = curTargetHrp.CFrame
+                myHrp.AssemblyLinearVelocity = safeVel * 500 + Vector3.new(0, 10000, 0)
+                RunService.RenderStepped:Wait()
+
+                if myHrp and myHrp.Parent then
+                    myHrp.AssemblyLinearVelocity = safeVel
+                end
             end
 
-            -- PYSÄYTETÄÄN OMA HAHMO VÄLITTÖMÄSTI SIIHEN MISSÄ OLTIN (Ei spawnaa taivaalta!)
+            -- PYSÄYTETÄÄN OMA HAHMO MAAHAN OSUMAPAIKKAAN (Ei lennä taivaalle!)
             if myHrp and myHrp.Parent then
                 myHrp.AssemblyLinearVelocity = Vector3.zero
                 myHrp.AssemblyAngularVelocity = Vector3.zero
@@ -1377,7 +1390,7 @@ local function executeScaryFling(targetPlayer)
         scaryPunchPhase = 0
     end
 
-    -- Siivotaan ESP ja palautetaan noclip/nopeus
+    -- Siivotaan ESP ja palautetaan nopeus
     if activeTargetHighlight then
         pcall(function() activeTargetHighlight:Destroy() end)
         activeTargetHighlight = nil
@@ -1390,8 +1403,8 @@ local function executeScaryFling(targetPlayer)
         myHum.WalkSpeed = originalSpeed
     end
 
-    -- ODOTETAAN 0.7s ENNEN KUIN PÄÄVALIKKO PALAA RUUDULLE (Näet kohteen lentävän)
-    task.wait(0.7)
+    -- ODOTETAAN 1.5s ENNEN KUIN PÄÄVALIKKO PALAA RUUDULLE (Näet kohteen lentävän rauhassa)
+    task.wait(1.5)
     mainFrame.Visible = true
 
     isScaryFlingActive = false
@@ -1581,13 +1594,13 @@ tpPill.MouseButton1Click:Connect(function()
 end)
 uiSwitches.ClickTP = { Pill = tpPill, Stroke = tpPillStroke }
 
--- 3. Touch Fling (Zero-Ping Directional Pulse)
+-- 3. Touch Fling (Klassinen Impulssi, Toimii paikallaan, 0 Ping)
 local _, flingPill, flingPillStroke = createDashboardCard("FlingCard", "Touch Fling", 3, false)
 flingPill.MouseButton1Click:Connect(function()
     if not isFlinging then
         startFling(LocalPlayer.Character)
         setPillVisual(flingPill, flingPillStroke, true)
-        notify("Fling", "Active (Zero Ping, Grounded).")
+        notify("Fling", "Active (Zero Ping, Stable).")
     else
         stopFling(LocalPlayer.Character)
         setPillVisual(flingPill, flingPillStroke, false)
@@ -1635,7 +1648,7 @@ invisPill.MouseButton1Click:Connect(function()
 end)
 uiSwitches.Invisible = { Pill = invisPill, Stroke = invisPillStroke }
 
--- 7. Helicopter Mode (Pure 3D Flight & Rotor Mast)
+-- 7. Helicopter Mode (Pure 3D Flight & Connected Mast)
 local _, heliPill, heliPillStroke = createDashboardCard("HeliCard", "Helicopter", 7, false)
 heliPill.MouseButton1Click:Connect(function()
     if currentAnimMode ~= "Helicopter" then
@@ -1650,7 +1663,7 @@ heliPill.MouseButton1Click:Connect(function()
 end)
 uiSwitches.Helicopter = { Pill = heliPill, Stroke = heliPillStroke }
 
--- 8. Dog Mode (Embedded Belly Legs & Downward Paws)
+-- 8. Dog Mode (Luonnolliset etutassut & Istuminen)
 local _, dogPill, dogPillStroke = createDashboardCard("DogCard", "Dog", 8, false)
 dogPill.MouseButton1Click:Connect(function()
     if currentAnimMode ~= "Dog" then
@@ -1665,7 +1678,7 @@ dogPill.MouseButton1Click:Connect(function()
 end)
 uiSwitches.Dog = { Pill = dogPill, Stroke = dogPillStroke }
 
--- 9. Rabbit Mode (Deep Embedded Legs & Upright Haunches)
+-- 9. Rabbit Mode (Maassa istuva kyyry & napakka loikka)
 local _, rabbitPill, rabbitPillStroke = createDashboardCard("RabbitCard", "Rabbit", 9, false)
 rabbitPill.MouseButton1Click:Connect(function()
     if currentAnimMode ~= "Rabbit" then
